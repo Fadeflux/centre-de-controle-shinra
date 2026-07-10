@@ -1,0 +1,12 @@
+{
+  "name": "Shinra — Contrôle",
+  "short_name": "Shinra",
+  "description": "Poste de pilotage de l'agence Shinra.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
