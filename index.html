@@ -7,7 +7,11 @@
 <title>Shinra — Contrôle</title>
 <link rel="manifest" href="manifest.json" />
 <link rel="icon" href="icon.svg" />
-<link rel="apple-touch-icon" href="icon.svg" />
+<link rel="apple-touch-icon" href="icon-180.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Shinra" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -305,6 +309,7 @@
     <div class="top-actions">
       <button class="btn" id="unlock" style="display:none">🔒 Mes chiffres</button>
       <button class="btn" id="push" title="Recevoir les alertes" style="display:none">🔔 Alertes</button>
+      <button class="btn" id="install" title="Installer l'app sur ton téléphone" style="display:none">📲 Installer</button>
       <button class="btn" id="morn" title="Écran du matin">☀️</button>
       <button class="btn" id="card" title="Carte du jour à partager">📸</button>
       <button class="btn" id="hide" title="Masquer les montants">👁️</button>
@@ -820,10 +825,22 @@ function b64ToU8(base64){
   for(let i=0;i<raw.length;i++) out[i]=raw.charCodeAt(i);
   return out;
 }
-if(("serviceWorker" in navigator) && ("PushManager" in window) && ("Notification" in window)){
-  navigator.serviceWorker.register("sw.js").catch(()=>{});
-  $("#push").style.display="inline-flex";
+if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(()=>{}); }
+if(("PushManager" in window) && ("Notification" in window)){ $("#push").style.display="inline-flex"; }
+
+/* ---------- installation sur l'écran d'accueil ---------- */
+let DEFERRED_PROMPT=null;
+function isStandalone(){ return (window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone===true; }
+window.addEventListener("beforeinstallprompt", e=>{ e.preventDefault(); DEFERRED_PROMPT=e; const b=$("#install"); if(b && !isStandalone()) b.style.display="inline-flex"; });
+window.addEventListener("appinstalled", ()=>{ const b=$("#install"); if(b) b.style.display="none"; });
+async function doInstall(){
+  if(DEFERRED_PROMPT){ DEFERRED_PROMPT.prompt(); try{ await DEFERRED_PROMPT.userChoice; }catch(e){} DEFERRED_PROMPT=null; const b=$("#install"); if(b) b.style.display="none"; return; }
+  const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  alert(isIOS
+    ? "📲 Installer sur iPhone :\n\n1. Appuie sur le bouton Partager (le carré avec une flèche ↑) en bas de Safari\n2. Choisis « Sur l'écran d'accueil »\n3. Appuie sur « Ajouter »\n\nL'app Shinra apparaîtra sur ton écran d'accueil."
+    : "📲 Installer :\n\n1. Ouvre le menu ⋮ du navigateur\n2. Choisis « Installer l'application » ou « Ajouter à l'écran d'accueil »");
 }
+{ const b=$("#install"); if(b){ b.onclick=doInstall; const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent); if(!isStandalone() && isIOS) b.style.display="inline-flex"; } }
 async function enablePush(){
   const btn=$("#push");
   if(!TOKEN){ openGate("Connecte-toi d'abord pour activer les alertes."); return; }
