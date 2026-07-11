@@ -145,6 +145,11 @@
   .tk-move{font:inherit;font-size:11px;padding:3px 4px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--muted);outline:none;max-width:104px}
   .tk-del{background:none;border:0;color:var(--faint);cursor:pointer;font-size:13px;padding:2px 4px}
   .tk-empty{color:var(--muted);font-size:13px;padding:6px 0}
+  .tasks-hero{border-top:3px solid var(--acc);box-shadow:0 0 0 1px color-mix(in srgb,var(--acc) 26%,transparent),0 10px 34px -14px color-mix(in srgb,var(--acc) 50%,transparent)}
+  .tasks-hero .tkbox-head{font-size:16px}
+  .restart-btn{margin-left:8px;font:inherit;font-size:12px;font-weight:600;padding:6px 10px;border-radius:8px;border:1px solid var(--line-2);background:var(--bg);color:var(--text);cursor:pointer}
+  .restart-btn:hover{border-color:var(--acc);color:var(--acc)}
+  .restart-btn:disabled{opacity:.7;cursor:default}
   .jr-head .c{font-size:11px;color:var(--faint);font-weight:500;margin-left:auto}
   .jr-row{display:flex;gap:11px;padding:9px 0;border-bottom:.5px solid var(--line)}
   .jr-row:last-child{border-bottom:0}
@@ -274,17 +279,7 @@
   <div class="alert" id="alert"></div>
   <div class="daily" id="daily"></div>
 
-  <div class="rappels" id="rappels" style="display:none"></div>
-
-  <div class="todo" id="todo">
-    <div class="todo-head">📝 Ma journée <span class="c" id="todoCount"></span></div>
-    <input id="todoInput" placeholder="Ajouter une tâche… (Entrée)" autocomplete="off" />
-    <div id="todoList"></div>
-  </div>
-
-  <div class="summary" id="summary"></div>
-
-  <div class="tkbox" id="tasks">
+  <div class="tkbox tasks-hero" id="tasks">
     <div class="tkbox-head">✅ Tâches d'équipe
       <select id="taskWho" class="tk-who" title="Qui es-tu ?"></select>
     </div>
@@ -297,6 +292,16 @@
     </div>
     <div id="taskList"></div>
   </div>
+
+  <div class="rappels" id="rappels" style="display:none"></div>
+
+  <div class="todo" id="todo">
+    <div class="todo-head">📝 Ma journée <span class="c" id="todoCount"></span></div>
+    <input id="todoInput" placeholder="Ajouter une tâche… (Entrée)" autocomplete="off" />
+    <div id="todoList"></div>
+  </div>
+
+  <div class="summary" id="summary"></div>
 
   <div id="sections"></div>
 
@@ -352,7 +357,7 @@ const fmtBig   = v => {
 };
 
 const TOOLS = [
-  { id:"lola",             world:"shinra", cat:"Shinra", name:"Bot Lola",          icon:"L", openUrl:"", voyantOnly:true },
+  { id:"lola",             world:"shinra", cat:"Shinra", name:"Bot Lola",          icon:"L", openUrl:"", voyantOnly:true, restart:"bot-discord-shinra" },
   { id:"clipfusion-shinra",world:"shinra", cat:"Shinra", name:"ClipFusion Shinra", icon:"C", openUrl:"https://repurposebot-production-8823.up.railway.app",
     metrics:[{k:"drives7d",l:"Drives 7j",f:fmtInt},{k:"views7d",l:"Vues 7j",f:fmtBig}] },
   { id:"shinra-finance",   world:"shinra", cat:"Shinra", name:"Shinra Finance",    icon:"$", openUrl:"https://fadeflux.github.io/shinra-finance/",
@@ -368,11 +373,11 @@ const DEMO = {
 
 /* ---------- état ---------- */
 const $ = s => document.querySelector(s);
-let TOKEN = localStorage.getItem("cc_token") || "";
-let PINS  = JSON.parse(localStorage.getItem("cc_pins") || "[]");
+let TOKEN = localStorage.getItem("ccs_token") || "";
+let PINS  = JSON.parse(localStorage.getItem("ccs_pins") || "[]");
 let LAST  = DEMO;
 let WORLD = "all";
-let HIDE  = localStorage.getItem("cc_hide") === "1";
+let HIDE  = localStorage.getItem("ccs_hide") === "1";
 let IS_LIVE = false;
 const ACCENTS = { all:["#4ade80","#3dc970"], shinra:["#4ade80","#3dc970"], noctra:["#4ade80","#3dc970"] };
 function applyAccent(){
@@ -381,7 +386,7 @@ function applyAccent(){
   document.documentElement.style.setProperty("--acc-hover", a[1]);
 }
 function setWorld(w){
-  WORLD = w; localStorage.setItem("cc_world", w);
+  WORLD = w; localStorage.setItem("ccs_world", w);
   [...document.querySelectorAll("#worlds button")].forEach(b=>b.classList.toggle("won", b.getAttribute("data-world")===w));
   applyAccent(); render(LAST);
 }
@@ -424,9 +429,10 @@ function cardHTML(t, data){
     }).join("");
     body = `<div class="metrics">${m}</div>`;
   }
+  const restartBtn = (t.restart && TOKEN) ? `<button class="restart-btn" data-restart="${escapeHtml(t.restart)}" data-restartname="${escapeHtml(t.name)}" title="Redémarrer ce bot">🔄 Redémarrer</button>` : "";
   const foot = t.build
     ? `<div class="card-foot"><span class="pill">à venir</span></div>`
-    : `<div class="card-foot"><a class="open ${t.openUrl?"":"disabled"}" href="${t.openUrl||"#"}" ${t.openUrl?`data-openurl="${escapeHtml(t.openUrl)}" data-openid="${t.id}" data-openname="${escapeHtml(t.name)}"`:""} target="_blank" rel="noopener">${t.openUrl?"Ouvrir":"URL à définir"}</a></div>`;
+    : `<div class="card-foot"><a class="open ${t.openUrl?"":"disabled"}" href="${t.openUrl||"#"}" ${t.openUrl?`data-openurl="${escapeHtml(t.openUrl)}" data-openid="${t.id}" data-openname="${escapeHtml(t.name)}"`:""} target="_blank" rel="noopener">${t.openUrl?"Ouvrir":"URL à définir"}</a>${restartBtn}</div>`;
   return `<div class="card ${t.featured?"featured":""}">
     <div class="card-top"><div class="ico">${t.icon}</div><div class="card-name">${t.name}</div>${star}${dot}</div>
     ${body}${foot}</div>`;
@@ -545,7 +551,7 @@ async function load(){
 function togglePin(id){
   const i = PINS.indexOf(id);
   if (i>=0) PINS.splice(i,1); else PINS.push(id);
-  localStorage.setItem("cc_pins", JSON.stringify(PINS));
+  localStorage.setItem("ccs_pins", JSON.stringify(PINS));
   render(LAST);
 }
 $("#sections").addEventListener("click", e=>{
@@ -557,7 +563,7 @@ $("#sections").addEventListener("click", e=>{
 function openGate(msg){ $("#gate").classList.add("show"); $("#pwErr").textContent=msg||""; setTimeout(()=>$("#pw").focus(),50); }
 function closeGate(){ $("#gate").classList.remove("show"); }
 $("#unlock").onclick = ()=>openGate();
-$("#pwGo").onclick = ()=>{ TOKEN=$("#pw").value.trim(); localStorage.setItem("cc_token",TOKEN); closeGate(); load(); loadTodosFromBrain(); loadJournal(); loadTasks(); };
+$("#pwGo").onclick = ()=>{ TOKEN=$("#pw").value.trim(); localStorage.setItem("ccs_token",TOKEN); closeGate(); load(); loadTodosFromBrain(); loadJournal(); loadTasks(); };
 $("#pw").addEventListener("keydown",e=>{ if(e.key==="Enter")$("#pwGo").click(); });
 $("#refresh").onclick = load;
 
@@ -572,17 +578,17 @@ $("#tv").onclick = ()=>{
 /* ---------- mode discret (masquer les montants) ---------- */
 $("#hide").textContent = HIDE ? "🙈" : "👁️";
 $("#hide").onclick = ()=>{
-  HIDE = !HIDE; localStorage.setItem("cc_hide", HIDE?"1":"0");
+  HIDE = !HIDE; localStorage.setItem("ccs_hide", HIDE?"1":"0");
   $("#hide").textContent = HIDE ? "🙈" : "👁️";
   render(LAST); renderCosts();
 };
 
 /* ---------- ma journée (à faire) ---------- */
-let TODOS = JSON.parse(localStorage.getItem("cc_todos") || "[]");
+let TODOS = JSON.parse(localStorage.getItem("ccs_todos") || "[]");
 let todoSyncT = null;
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function saveTodos(){
-  localStorage.setItem("cc_todos", JSON.stringify(TODOS));
+  localStorage.setItem("ccs_todos", JSON.stringify(TODOS));
   if(TOKEN && HUB_URL){
     clearTimeout(todoSyncT);
     todoSyncT = setTimeout(()=>{ fetch(HUB_BASE+"/api/hub/notes",{method:"POST",headers:{"content-type":"application/json","x-hub-token":TOKEN},body:JSON.stringify({notes:TODOS})}).catch(()=>{}); }, 600);
@@ -610,7 +616,7 @@ async function loadTodosFromBrain(){
     const r = await fetch(HUB_BASE+"/api/hub/notes",{headers:{"x-hub-token":TOKEN},cache:"no-store"});
     if(!r.ok) return;
     const j = await r.json();
-    if(Array.isArray(j.notes)){ TODOS = j.notes; localStorage.setItem("cc_todos",JSON.stringify(TODOS)); renderTodos(); }
+    if(Array.isArray(j.notes)){ TODOS = j.notes; localStorage.setItem("ccs_todos",JSON.stringify(TODOS)); renderTodos(); }
   }catch(e){}
 }
 renderTodos();
@@ -636,8 +642,8 @@ $("#rappels").addEventListener("click",e=>{ const b=e.target.closest("[data-rap]
 renderRappels();
 
 /* ---------- dépenses d'outils ---------- */
-let COSTS = JSON.parse(localStorage.getItem("cc_costs") || "[]");
-function saveCosts(){ localStorage.setItem("cc_costs", JSON.stringify(COSTS)); }
+let COSTS = JSON.parse(localStorage.getItem("ccs_costs") || "[]");
+function saveCosts(){ localStorage.setItem("ccs_costs", JSON.stringify(COSTS)); }
 function renderCosts(){
   const tot = COSTS.reduce((a,c)=>a+(Number(c.m)||0),0);
   $("#costsTotal").textContent = COSTS.length ? `${fmtMoney(tot)} / mois` : "";
@@ -656,8 +662,8 @@ $("#costsList").addEventListener("click",e=>{ const d=e.target.closest("[data-cd
 renderCosts();
 
 /* ---------- mes raccourcis + ouvrir ma routine ---------- */
-let SHORTCUTS = JSON.parse(localStorage.getItem("cc_shortcuts") || "[]");
-function saveShortcuts(){ localStorage.setItem("cc_shortcuts", JSON.stringify(SHORTCUTS)); }
+let SHORTCUTS = JSON.parse(localStorage.getItem("ccs_shortcuts") || "[]");
+function saveShortcuts(){ localStorage.setItem("ccs_shortcuts", JSON.stringify(SHORTCUTS)); }
 function normUrl(u){ u=(u||"").trim(); if(!u) return ""; if(!/^https?:\/\//i.test(u)) u="https://"+u; return u; }
 function renderShortcuts(){
   if(!SHORTCUTS.length){ $("#scGrid").innerHTML = `<div class="sc-empty">Ajoute tes liens (Railway, Drive, salons Discord…). L'étoile ★ = dans ta routine du matin.</div>`; return; }
@@ -739,7 +745,19 @@ $("#tabbar").addEventListener("click",e=>{
   const c=e.target.closest("[data-close]"); if(c){ e.stopPropagation(); closeTab(c.getAttribute("data-close")); return; }
   const t=e.target.closest("[data-tab]"); if(t){ ACTIVE=t.getAttribute("data-tab"); updateView(); }
 });
+async function doRestart(bot, name, btn){
+  if(!TOKEN) return;
+  if(!confirm(`Redémarrer ${name} ?\nLe bot sera indisponible ~30 s le temps de redémarrer.`)) return;
+  const old=btn.textContent; btn.disabled=true; btn.textContent="⏳ Redémarrage…";
+  try{
+    const r=await fetch(HUB_BASE+"/api/hub/restart",{method:"POST",headers:{"content-type":"application/json","x-hub-token":TOKEN},body:JSON.stringify({bot})});
+    const j=await r.json();
+    if(j.ok){ btn.textContent="✅ Relancé"; setTimeout(()=>{ btn.disabled=false; btn.textContent=old; },4000); }
+    else { btn.textContent="⚠️ Échec"; alert("Échec du redémarrage : "+(j.error||"inconnu")); setTimeout(()=>{ btn.disabled=false; btn.textContent=old; },3000); }
+  }catch(e){ btn.textContent="⚠️ Erreur"; setTimeout(()=>{ btn.disabled=false; btn.textContent=old; },3000); }
+}
 $("#sections").addEventListener("click",e=>{
+  const rb=e.target.closest("[data-restart]"); if(rb){ e.preventDefault(); doRestart(rb.getAttribute("data-restart"), rb.getAttribute("data-restartname"), rb); return; }
   const a=e.target.closest("[data-openurl]"); if(a){ e.preventDefault(); openTab(a.getAttribute("data-openid"), a.getAttribute("data-openname"), a.getAttribute("data-openurl")); }
 });
 renderTabStrip();
@@ -775,19 +793,22 @@ $("#push").onclick=enablePush;
 
 /* ---------- démarrage ---------- */
 /* ---------- tâches d'équipe (3 listes + tags, sync serveur) ---------- */
-const LABEL2 = "Associé";   // Shinra ; côté Noctra = "Ma modèle"
-const TK_LISTS = [["moi","📋 Moi"],["other","👤 "+LABEL2],["general","🌐 Générale"]];
-let TASKS = JSON.parse(localStorage.getItem("cc_tasks")||"null") || {moi:[],other:[],general:[]};
-let TK_VIEW = localStorage.getItem("cc_tkview") || "moi";
+const NAMES = { moi:"Andre", other:"Ghoulz" };   // Shinra ; côté Noctra = { moi:"Andre", other:"Manon" }
+const TK_KEYS = ["moi","other","general"];
+let WHO = localStorage.getItem("ccs_who") || "moi";
+let TASKS = JSON.parse(localStorage.getItem("ccs_tasks")||"null") || {moi:[],other:[],general:[]};
+let TK_VIEW = localStorage.getItem("ccs_tkview") || WHO;
 let TK_SAVE_T = null;
+function tkTabLabel(k){ if(k==="general") return "🌐 Générale"; return (k===WHO?"📋 ":"👤 ")+NAMES[k]; }
+function tkName(k){ if(k==="general") return "Générale"; return NAMES[k]+(k===WHO?" (moi)":""); }
 function tkNorm(){ ["moi","other","general"].forEach(k=>{ if(!Array.isArray(TASKS[k])) TASKS[k]=[]; }); }
 function tkId(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 function saveTasks(){
-  tkNorm(); localStorage.setItem("cc_tasks",JSON.stringify(TASKS));
+  tkNorm(); localStorage.setItem("ccs_tasks",JSON.stringify(TASKS));
   if(TOKEN){ clearTimeout(TK_SAVE_T); TK_SAVE_T=setTimeout(()=>{ fetch(HUB_BASE+"/api/hub/tasks",{method:"POST",headers:{"content-type":"application/json","x-hub-token":TOKEN},body:JSON.stringify({tasks:TASKS})}).catch(()=>{}); },500); }
 }
 async function loadTasks(){
-  if(TOKEN){ try{ const r=await fetch(HUB_BASE+"/api/hub/tasks",{headers:{"x-hub-token":TOKEN}}); if(r.ok){ const j=await r.json(); if(j.tasks){ TASKS=j.tasks; tkNorm(); localStorage.setItem("cc_tasks",JSON.stringify(TASKS)); } } }catch(e){} }
+  if(TOKEN){ try{ const r=await fetch(HUB_BASE+"/api/hub/tasks",{headers:{"x-hub-token":TOKEN}}); if(r.ok){ const j=await r.json(); if(j.tasks){ TASKS=j.tasks; tkNorm(); localStorage.setItem("ccs_tasks",JSON.stringify(TASKS)); } } }catch(e){} }
   renderTasks();
 }
 function addTask(){
@@ -801,20 +822,20 @@ function addTask(){
 function renderTasks(){
   tkNorm();
   const who=$("#taskWho");
-  if(who && !who.dataset.filled){ who.innerHTML=`<option value="moi">Je suis : Moi</option><option value="other">Je suis : ${escapeHtml(LABEL2)}</option>`; who.dataset.filled="1"; who.value=localStorage.getItem("cc_who")||"moi"; who.onchange=()=>localStorage.setItem("cc_who",who.value); }
+  if(who && !who.dataset.filled){ who.innerHTML=`<option value="moi">Je suis : ${escapeHtml(NAMES.moi)}</option><option value="other">Je suis : ${escapeHtml(NAMES.other)}</option>`; who.dataset.filled="1"; who.value=WHO; who.onchange=()=>{ WHO=who.value; localStorage.setItem("ccs_who",WHO); TK_VIEW=WHO; renderTasks(); }; }
   const dest=$("#taskDest");
-  if(dest && !dest.dataset.filled){ dest.innerHTML=TK_LISTS.map(([k,l])=>`<option value="${k}">${escapeHtml(l)}</option>`).join(""); dest.dataset.filled="1"; dest.value=TK_VIEW; }
-  $("#taskTabs").innerHTML=TK_LISTS.map(([k,l])=>{ const n=TASKS[k].filter(x=>!x.done).length; return `<button class="tk-tab ${k===TK_VIEW?'on':''}" data-tkview="${k}">${escapeHtml(l)}${n?`<span class="tk-n">${n}</span>`:""}</button>`; }).join("");
+  if(dest){ dest.innerHTML=TK_KEYS.map(k=>`<option value="${k}">${escapeHtml(tkName(k))}</option>`).join(""); dest.value=TK_VIEW; }
+  $("#taskTabs").innerHTML=TK_KEYS.map(k=>{ const n=TASKS[k].filter(x=>!x.done).length; return `<button class="tk-tab ${k===TK_VIEW?'on':''}" data-tkview="${k}">${escapeHtml(tkTabLabel(k))}${n?`<span class="tk-n">${n}</span>`:""}</button>`; }).join("");
   const items=TASKS[TK_VIEW];
   $("#taskList").innerHTML = items.length ? items.map(x=>{
     const tags=(x.tags||[]).map(g=>`<span class="tk-tag">#${escapeHtml(g)}</span>`).join("");
-    const opts=TK_LISTS.map(([k,l])=>`<option value="${k}" ${k===TK_VIEW?"selected":""}>${escapeHtml(l.replace(/^\S+\s/,""))}</option>`).join("");
+    const opts=TK_KEYS.map(k=>`<option value="${k}" ${k===TK_VIEW?"selected":""}>${escapeHtml(tkName(k))}</option>`).join("");
     return `<div class="tk-row ${x.done?"done":""}"><button class="tk-ck" data-tkdone="${x.id}">${x.done?"✅":"⬜"}</button><div class="tk-body"><span class="tk-txt">${escapeHtml(x.text)}</span>${tags?`<div class="tk-tags">${tags}</div>`:""}</div><select class="tk-move" data-tkmove="${x.id}" title="Déplacer vers…">${opts}</select><button class="tk-del" data-tkdel="${x.id}">✕</button></div>`;
   }).join("") : `<div class="tk-empty">Rien ici — ajoute une tâche 👆</div>`;
 }
 { const a=$("#taskAdd"); if(a) a.onclick=addTask; }
 { const t=$("#taskText"); if(t) t.addEventListener("keydown",e=>{ if(e.key==="Enter") addTask(); }); }
-{ const tabs=$("#taskTabs"); if(tabs) tabs.addEventListener("click",e=>{ const b=e.target.closest("[data-tkview]"); if(b){ TK_VIEW=b.getAttribute("data-tkview"); localStorage.setItem("cc_tkview",TK_VIEW); const d=$("#taskDest"); if(d) d.value=TK_VIEW; renderTasks(); } }); }
+{ const tabs=$("#taskTabs"); if(tabs) tabs.addEventListener("click",e=>{ const b=e.target.closest("[data-tkview]"); if(b){ TK_VIEW=b.getAttribute("data-tkview"); localStorage.setItem("ccs_tkview",TK_VIEW); const d=$("#taskDest"); if(d) d.value=TK_VIEW; renderTasks(); } }); }
 { const list=$("#taskList"); if(list){
   list.addEventListener("click",e=>{
     const ck=e.target.closest("[data-tkdone]"); if(ck){ const it=TASKS[TK_VIEW].find(x=>x.id===ck.getAttribute("data-tkdone")); if(it){ it.done=!it.done; saveTasks(); renderTasks(); } return; }
