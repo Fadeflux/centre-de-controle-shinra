@@ -959,7 +959,7 @@ function renderMorning(){
   const tasks=[]; ["moi","general"].forEach(k=>{ ((typeof TASKS!=="undefined"&&TASKS[k])||[]).filter(t=>!t.done).forEach(t=>tasks.push(t)); }); const shown=tasks.slice(0,6);
   const na=LAST_NA;
   $("#morningBody").innerHTML=`
-    <div class="mn-top"><div class="mn-hi">${hi} ${escapeHtml(name)} 👋</div><div style="display:flex;gap:10px;align-items:center">${streak>0?`<span class="mn-streak">🔥 ${streak} j</span>`:""}<button class="mn-close" id="mnClose">✕</button></div></div>
+    <div class="mn-top"><div class="mn-hi">${hi} ${escapeHtml(name)} 👋</div><div style="display:flex;gap:10px;align-items:center">${streak>0?`<span class="mn-streak">🔥 ${streak} j</span>`:""}<button class="mn-close" id="mnSpeak" title="Écouter mon résumé">🔊</button><button class="mn-close" id="mnClose">✕</button></div></div>
     <div class="mn-date">${new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}</div>
     <div class="mn-money"><div class="lbl">💰 Profit du mois</div><div class="big" id="mnMoney">${money(profit)}</div><div class="sub">agence Shinra</div></div>
     ${na?`<div class="mn-next">👉 ${na.icon||""} <b>${escapeHtml(na.text||"")}</b></div>`:""}
@@ -967,6 +967,19 @@ function renderMorning(){
     <button class="mn-go" id="mnGo">Commencer ma journée →</button>`;
   const mv=$("#mnMoney"); if(mv && !(typeof HIDE!=="undefined"&&HIDE)) animateCount(mv, profit||0, v=>v.toLocaleString("fr-FR")+" $");
   const cl=$("#mnClose"), go=$("#mnGo"); if(cl) cl.onclick=closeMorning; if(go) go.onclick=closeMorning;
+  const sp=$("#mnSpeak"); if(sp) sp.onclick=speakBriefing;
+}
+function speakBriefing(){
+  try{ if(!window.speechSynthesis) return;
+    const name=(typeof NAMES!=="undefined"&&NAMES[(typeof WHO!=="undefined")?WHO:"moi"])||"toi";
+    const h=new Date().getHours(), hi=h<12?"Bonjour":h<18?"Bon après-midi":"Bonsoir";
+    let profit=0; try{ profit=gg("shinra-finance","profitMonth"); }catch(e){}
+    const undone=(typeof TASKS!=="undefined")?["moi","other","general"].reduce((a,k)=>a+((TASKS[k]||[]).filter(t=>!t.done).length),0):0;
+    let p=[hi+" "+name+"."];
+    if(profit && !(typeof HIDE!=="undefined"&&HIDE)) p.push("Profit du mois : "+Math.round(profit)+" dollars.");
+    p.push(undone?(undone+" tâche"+(undone>1?"s":"")+" à faire."):"Aucune tâche en attente.");
+    const u=new SpeechSynthesisUtterance(p.join(" ")); u.lang="fr-FR"; window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
+  }catch(e){}
 }
 function showMorning(){ renderMorning(); $("#morning").classList.add("show"); }
 function closeMorning(){ $("#morning").classList.remove("show"); localStorage.setItem("ccs_morning",todayStr()); }
