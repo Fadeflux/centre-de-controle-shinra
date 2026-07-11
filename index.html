@@ -150,6 +150,10 @@
   .restart-btn{margin-left:8px;font:inherit;font-size:12px;font-weight:600;padding:6px 10px;border-radius:8px;border:1px solid var(--line-2);background:var(--bg);color:var(--text);cursor:pointer}
   .restart-btn:hover{border-color:var(--acc);color:var(--acc)}
   .restart-btn:disabled{opacity:.7;cursor:default}
+  .tk-row.late{background:color-mix(in srgb,var(--down) 9%,transparent);border-radius:8px;padding-left:8px;padding-right:8px}
+  .tk-late{font-size:11px;font-weight:700;color:var(--down);margin-left:8px;white-space:nowrap}
+  .tk-lt{background:var(--down);color:#fff;border-radius:999px;padding:0 5px;font-size:10px;margin-left:4px;font-weight:700}
+  .tk-latesum{color:var(--down);font-weight:700;font-size:13px;padding:2px 0 10px}
   .jr-head .c{font-size:11px;color:var(--faint);font-weight:500;margin-left:auto}
   .jr-row{display:flex;gap:11px;padding:9px 0;border-bottom:.5px solid var(--line)}
   .jr-row:last-child{border-bottom:0}
@@ -825,13 +829,17 @@ function renderTasks(){
   if(who && !who.dataset.filled){ who.innerHTML=`<option value="moi">Je suis : ${escapeHtml(NAMES.moi)}</option><option value="other">Je suis : ${escapeHtml(NAMES.other)}</option>`; who.dataset.filled="1"; who.value=WHO; who.onchange=()=>{ WHO=who.value; localStorage.setItem("ccs_who",WHO); TK_VIEW=WHO; renderTasks(); }; }
   const dest=$("#taskDest");
   if(dest){ dest.innerHTML=TK_KEYS.map(k=>`<option value="${k}">${escapeHtml(tkName(k))}</option>`).join(""); dest.value=TK_VIEW; }
-  $("#taskTabs").innerHTML=TK_KEYS.map(k=>{ const n=TASKS[k].filter(x=>!x.done).length; return `<button class="tk-tab ${k===TK_VIEW?'on':''}" data-tkview="${k}">${escapeHtml(tkTabLabel(k))}${n?`<span class="tk-n">${n}</span>`:""}</button>`; }).join("");
+  const OVD=3*24*3600*1000, now=Date.now(), isLate=x=>!x.done && x.ts && (now-x.ts>OVD);
+  $("#taskTabs").innerHTML=TK_KEYS.map(k=>{ const n=TASKS[k].filter(x=>!x.done).length, lt=TASKS[k].filter(isLate).length; return `<button class="tk-tab ${k===TK_VIEW?'on':''}" data-tkview="${k}">${escapeHtml(tkTabLabel(k))}${n?`<span class="tk-n">${n}</span>`:""}${lt?`<span class="tk-lt">⏰${lt}</span>`:""}</button>`; }).join("");
   const items=TASKS[TK_VIEW];
-  $("#taskList").innerHTML = items.length ? items.map(x=>{
+  const lateCount=items.filter(isLate).length;
+  const lateSum=lateCount?`<div class="tk-latesum">⏰ ${lateCount} tâche${lateCount>1?"s":""} en retard (plus de 3 jours)</div>`:"";
+  $("#taskList").innerHTML = items.length ? (lateSum+items.map(x=>{
     const tags=(x.tags||[]).map(g=>`<span class="tk-tag">#${escapeHtml(g)}</span>`).join("");
     const opts=TK_KEYS.map(k=>`<option value="${k}" ${k===TK_VIEW?"selected":""}>${escapeHtml(tkName(k))}</option>`).join("");
-    return `<div class="tk-row ${x.done?"done":""}"><button class="tk-ck" data-tkdone="${x.id}">${x.done?"✅":"⬜"}</button><div class="tk-body"><span class="tk-txt">${escapeHtml(x.text)}</span>${tags?`<div class="tk-tags">${tags}</div>`:""}</div><select class="tk-move" data-tkmove="${x.id}" title="Déplacer vers…">${opts}</select><button class="tk-del" data-tkdel="${x.id}">✕</button></div>`;
-  }).join("") : `<div class="tk-empty">Rien ici — ajoute une tâche 👆</div>`;
+    const late=isLate(x), days=late?Math.max(1,Math.floor((now-x.ts)/(24*3600*1000))):0;
+    return `<div class="tk-row ${x.done?"done":""} ${late?"late":""}"><button class="tk-ck" data-tkdone="${x.id}">${x.done?"✅":"⬜"}</button><div class="tk-body"><span class="tk-txt">${escapeHtml(x.text)}</span>${late?`<span class="tk-late">⏰ ${days}j</span>`:""}${tags?`<div class="tk-tags">${tags}</div>`:""}</div><select class="tk-move" data-tkmove="${x.id}" title="Déplacer vers…">${opts}</select><button class="tk-del" data-tkdel="${x.id}">✕</button></div>`;
+  }).join("")) : `<div class="tk-empty">Rien ici — ajoute une tâche 👆</div>`;
 }
 { const a=$("#taskAdd"); if(a) a.onclick=addTask; }
 { const t=$("#taskText"); if(t) t.addEventListener("keydown",e=>{ if(e.key==="Enter") addTask(); }); }
