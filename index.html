@@ -893,7 +893,7 @@ let TK_SAVE_T = null;
 function tkTabLabel(k){ if(k==="general") return "🌐 Générale"; return (k===WHO?"📋 ":"👤 ")+NAMES[k]; }
 function tkName(k){ if(k==="general") return "Générale"; return NAMES[k]+(k===WHO?" (moi)":""); }
 const REPEAT_MS={day:864e5,week:6048e5,quinzaine:1296e6}, REPEAT_LBL={day:"chaque jour",week:"chaque semaine",quinzaine:"chaque quinzaine"};
-function tkReconcile(){ let ch=false; const now=Date.now(); TK_KEYS.forEach(k=>{ (TASKS[k]||[]).forEach(x=>{ if(x.repeat && x.done && x.doneTs && (now-x.doneTs>=(REPEAT_MS[x.repeat]||864e5))){ x.done=false; x.doneTs=0; x.ts=now; ch=true; } }); }); return ch; }
+function tkReconcile(){ let ch=false; const now=Date.now(); TK_KEYS.forEach(k=>{ (TASKS[k]||[]).forEach(x=>{ if(x.repeat && !x.del && x.done && x.doneTs && (now-x.doneTs>=(REPEAT_MS[x.repeat]||864e5))){ x.done=false; x.doneTs=0; x.ts=now; x.upd=now; ch=true; } }); }); return ch; }
 function tkNorm(){ ["moi","other","general"].forEach(k=>{ if(!Array.isArray(TASKS[k])) TASKS[k]=[]; }); }
 function tkId(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 let TK_LAST_EDIT = 0;
@@ -901,21 +901,39 @@ function saveTasks(){
   tkNorm(); TK_LAST_EDIT=Date.now(); localStorage.setItem("ccs_tasks",JSON.stringify(TASKS));
   if(TOKEN){ clearTimeout(TK_SAVE_T); TK_SAVE_T=setTimeout(()=>{ fetch(HUB_BASE+"/api/hub/tasks",{method:"POST",headers:{"content-type":"application/json","x-hub-token":TOKEN},body:JSON.stringify({tasks:TASKS})}).catch(()=>{}); },500); }
 }
+function tkSig(x){ return [x.id,x.text,(x.tags||[]).join(","),x.done?1:0,x.prio||"n",x.repeat||"",x.doneTs||0,x.del?1:0,x.upd||0].join("|"); }
+function tkBoardSig(b){ return TK_KEYS.map(k=>(b[k]||[]).map(tkSig).join(";")).join("§"); }
+function tkMerge(local, server){
+  const out={}; let localWins=false;
+  TK_KEYS.forEach(k=>{
+    const byId={};
+    (server[k]||[]).forEach(x=>{ if(x&&x.id) byId[x.id]=x; });
+    (local[k]||[]).forEach(x=>{ if(!x||!x.id) return; const sv=byId[x.id]; if(!sv || (Number(x.upd)||0)>(Number(sv.upd)||0)){ byId[x.id]=x; localWins=true; } });
+    out[k]=Object.keys(byId).map(id=>byId[id]);
+  });
+  return {board:out, localWins};
+}
 async function loadTasks(){
-  if(TOKEN){ try{ const r=await fetch(HUB_BASE+"/api/hub/tasks",{headers:{"x-hub-token":TOKEN}}); if(r.ok){ const j=await r.json(); if(j.tasks){ TASKS=j.tasks; tkNorm(); localStorage.setItem("ccs_tasks",JSON.stringify(TASKS)); } } }catch(e){} }
+  if(TOKEN){ try{ const r=await fetch(HUB_BASE+"/api/hub/tasks",{headers:{"x-hub-token":TOKEN}}); if(r.ok){ const j=await r.json(); if(j.tasks){ const m=tkMerge(TASKS,j.tasks); TASKS=m.board; tkNorm(); localStorage.setItem("ccs_tasks",JSON.stringify(TASKS)); if(m.localWins) saveTasks(); } } }catch(e){} }
   renderTasks();
 }
 async function syncTasks(){
-  if(!TOKEN || Date.now()-TK_LAST_EDIT<5000) return;
-  try{ const r=await fetch(HUB_BASE+"/api/hub/tasks",{headers:{"x-hub-token":TOKEN}}); if(r.ok){ const j=await r.json(); if(j.tasks){ const s=JSON.stringify({moi:j.tasks.moi||[],other:j.tasks.other||[],general:j.tasks.general||[]}); if(s!==JSON.stringify({moi:TASKS.moi||[],other:TASKS.other||[],general:TASKS.general||[]})){ TASKS=j.tasks; tkNorm(); localStorage.setItem("ccs_tasks",s); renderTasks(); } } } }catch(e){}
+  if(!TOKEN) return;
+  try{
+    const r=await fetch(HUB_BASE+"/api/hub/tasks",{headers:{"x-hub-token":TOKEN}}); if(!r.ok) return;
+    const j=await r.json(); if(!j.tasks) return;
+    const m=tkMerge(TASKS,j.tasks);
+    if(tkBoardSig(m.board)!==tkBoardSig(TASKS)){ TASKS=m.board; tkNorm(); localStorage.setItem("ccs_tasks",JSON.stringify(TASKS)); renderTasks(); }
+    if(m.localWins && Date.now()-TK_LAST_EDIT>1500){ fetch(HUB_BASE+"/api/hub/tasks",{method:"POST",headers:{"content-type":"application/json","x-hub-token":TOKEN},body:JSON.stringify({tasks:TASKS})}).catch(()=>{}); }
+  }catch(e){}
 }
-setInterval(syncTasks, 10000);
+setInterval(syncTasks, 8000);
 function addTask(){
   const t=$("#taskText"), g=$("#taskTags"), d=$("#taskDest"), rp=$("#taskRepeat");
   const text=(t.value||"").trim(); if(!text) return;
   const tags=(g.value||"").split(",").map(s=>s.trim()).filter(Boolean).slice(0,8);
   const dest=(d&&d.value)||"moi", repeat=(rp&&rp.value)||"";
-  tkNorm(); TASKS[dest].unshift({id:tkId(),text,tags,done:false,ts:Date.now(),repeat});
+  tkNorm(); TASKS[dest].unshift({id:tkId(),text,tags,done:false,ts:Date.now(),repeat,upd:Date.now()});
   t.value=""; g.value=""; if(rp) rp.value=""; saveTasks(); renderTasks();
 }
 function renderTasks(){
@@ -924,9 +942,9 @@ function renderTasks(){
   if(who && !who.dataset.filled){ who.innerHTML=`<option value="moi">Je suis : ${escapeHtml(NAMES.moi)}</option><option value="other">Je suis : ${escapeHtml(NAMES.other)}</option>`; who.dataset.filled="1"; who.value=WHO; who.onchange=()=>{ WHO=who.value; localStorage.setItem("ccs_who",WHO); TK_VIEW=WHO; renderTasks(); }; }
   const dest=$("#taskDest");
   if(dest){ dest.innerHTML=TK_KEYS.map(k=>`<option value="${k}">${escapeHtml(tkName(k))}</option>`).join(""); dest.value=TK_VIEW; }
-  const OVD=3*24*3600*1000, now=Date.now(), isLate=x=>!x.done && x.ts && (now-x.ts>OVD);
-  $("#taskTabs").innerHTML=TK_KEYS.map(k=>{ const n=TASKS[k].filter(x=>!x.done).length, lt=TASKS[k].filter(isLate).length; return `<button class="tk-tab ${k===TK_VIEW?'on':''}" data-tkview="${k}">${escapeHtml(tkTabLabel(k))}${n?`<span class="tk-n">${n}</span>`:""}${lt?`<span class="tk-lt">⏰${lt}</span>`:""}</button>`; }).join("");
-  const items=TASKS[TK_VIEW];
+  const OVD=3*24*3600*1000, now=Date.now(), isLate=x=>!x.done && !x.del && x.ts && (now-x.ts>OVD);
+  $("#taskTabs").innerHTML=TK_KEYS.map(k=>{ const n=TASKS[k].filter(x=>!x.done && !x.del).length, lt=TASKS[k].filter(isLate).length; return `<button class="tk-tab ${k===TK_VIEW?'on':''}" data-tkview="${k}">${escapeHtml(tkTabLabel(k))}${n?`<span class="tk-n">${n}</span>`:""}${lt?`<span class="tk-lt">⏰${lt}</span>`:""}</button>`; }).join("");
+  const items=(TASKS[TK_VIEW]||[]).filter(x=>!x.del);
   const lateCount=items.filter(isLate).length;
   const lateSum=lateCount?`<div class="tk-latesum">⏰ ${lateCount} tâche${lateCount>1?"s":""} en retard (plus de 3 jours)</div>`:"";
   $("#taskList").innerHTML = items.length ? (lateSum+items.map(x=>{
@@ -941,11 +959,11 @@ function renderTasks(){
 { const tabs=$("#taskTabs"); if(tabs) tabs.addEventListener("click",e=>{ const b=e.target.closest("[data-tkview]"); if(b){ TK_VIEW=b.getAttribute("data-tkview"); localStorage.setItem("ccs_tkview",TK_VIEW); const d=$("#taskDest"); if(d) d.value=TK_VIEW; renderTasks(); } }); }
 { const list=$("#taskList"); if(list){
   list.addEventListener("click",e=>{
-    const ck=e.target.closest("[data-tkdone]"); if(ck){ const it=TASKS[TK_VIEW].find(x=>x.id===ck.getAttribute("data-tkdone")); if(it){ it.done=!it.done; if(it.done && it.repeat) it.doneTs=Date.now(); else if(!it.done) it.doneTs=0; saveTasks(); renderTasks(); } return; }
-    const dl=e.target.closest("[data-tkdel]"); if(dl){ const id=dl.getAttribute("data-tkdel"); TASKS[TK_VIEW]=TASKS[TK_VIEW].filter(x=>x.id!==id); saveTasks(); renderTasks(); return; }
+    const ck=e.target.closest("[data-tkdone]"); if(ck){ const it=TASKS[TK_VIEW].find(x=>x.id===ck.getAttribute("data-tkdone")); if(it){ it.done=!it.done; if(it.done && it.repeat) it.doneTs=Date.now(); else if(!it.done) it.doneTs=0; it.upd=Date.now(); saveTasks(); renderTasks(); } return; }
+    const dl=e.target.closest("[data-tkdel]"); if(dl){ const id=dl.getAttribute("data-tkdel"); const it=TASKS[TK_VIEW].find(x=>x.id===id); if(it){ it.del=true; it.upd=Date.now(); saveTasks(); renderTasks(); } return; }
   });
   list.addEventListener("change",e=>{
-    const mv=e.target.closest("[data-tkmove]"); if(mv){ const id=mv.getAttribute("data-tkmove"), to=mv.value; if(to!==TK_VIEW){ const i=TASKS[TK_VIEW].findIndex(x=>x.id===id); if(i>=0){ const it=TASKS[TK_VIEW].splice(i,1)[0]; TASKS[to].unshift(it); saveTasks(); renderTasks(); } } }
+    const mv=e.target.closest("[data-tkmove]"); if(mv){ const id=mv.getAttribute("data-tkmove"), to=mv.value; if(to!==TK_VIEW){ const it=TASKS[TK_VIEW].find(x=>x.id===id); if(it){ TASKS[to].unshift({id:tkId(),text:it.text,tags:it.tags||[],prio:it.prio||"n",repeat:it.repeat||"",done:!!it.done,doneTs:it.doneTs||0,ts:it.ts||Date.now(),upd:Date.now()}); it.del=true; it.upd=Date.now(); saveTasks(); renderTasks(); } } }
   });
 } }
 
