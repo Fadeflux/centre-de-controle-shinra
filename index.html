@@ -635,7 +635,7 @@ async function doLogin(){
     if(r.ok){ const j=await r.json(); if(j.token){ tok=j.token; who=j.who||null; name=j.name||""; } }
   }catch(e){}
   go.disabled=false; go.textContent="Entrer";
-  if(!tok){ if(input.length>=20 && !user){ tok=input; } else { $("#pwErr").textContent="Identifiant ou mot de passe incorrect."; return; } }
+  if(!tok){ $("#pwErr").textContent="Identifiant ou mot de passe incorrect."; return; }
   TOKEN=tok; localStorage.setItem("ccs_token",TOKEN);
   if(who){ WHO=who; localStorage.setItem("ccs_who",WHO); TK_VIEW=WHO; localStorage.setItem("ccs_tkview",WHO); }
   if(name){ CURRENT_USER=name; localStorage.setItem("ccs_name",name); }
