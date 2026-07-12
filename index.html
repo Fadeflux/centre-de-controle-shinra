@@ -109,6 +109,10 @@
   .sc-head .rule{flex:1;height:1px;background:var(--line);min-width:20px}
   .sc-head .routine{font:inherit;font-size:12px;font-weight:500;color:var(--acc-ink);background:none;border:1px solid var(--acc-line);border-radius:8px;padding:6px 12px;cursor:pointer;white-space:nowrap;transition:.15s}
   .sc-head .routine:hover{background:var(--acc-bg)}
+  .rt-openwrap{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+  .rt-open{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:10px;background:var(--acc-bg);border:1px solid var(--acc-line);color:var(--acc-ink);text-decoration:none;font-weight:600;font-size:15px}
+  .rt-open:active{transform:scale(.98)}
+  .rt-open span{opacity:.6}
   .sc-add{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
   .sc-add input{font:inherit;font-size:14px;padding:9px 11px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--text);outline:none}
   .sc-add input:focus{border-color:var(--acc)}
@@ -140,7 +144,8 @@
   #taskAdd{margin:0;padding:9px 15px;font:inherit;font-size:15px;border:0;border-radius:9px;background:var(--acc);color:#04120a;font-weight:700;cursor:pointer}
   .tk-row{display:flex;align-items:flex-start;gap:9px;padding:9px 0;border-bottom:.5px solid var(--line)}
   .tk-row:last-child{border-bottom:0}
-  .tk-ck{background:none;border:0;cursor:pointer;font-size:16px;line-height:1.3;padding:0}
+  .tk-ck{background:none;border:0;cursor:pointer;font-size:16px;line-height:1.3;padding:0;transition:transform .12s ease}
+  .tk-ck:active{transform:scale(1.35)}
   .tk-body{flex:1;min-width:0}
   .tk-txt{font-size:14px;color:var(--text)}
   .tk-row.done .tk-txt{text-decoration:line-through;color:var(--muted)}
@@ -763,7 +768,10 @@ $("#scGrid").addEventListener("click",e=>{
 $("#scRoutine").onclick = ()=>{
   const routine = SHORTCUTS.filter(s=>s.r);
   if(!routine.length){ setBanner(`<b>Astuce</b> — marque des raccourcis avec l'étoile ★ pour les mettre dans ta routine du matin.`); return; }
-  routine.forEach(s=>window.open(s.u,"_blank","noopener"));
+  const isMobile = matchMedia("(max-width:600px)").matches || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  if(!isMobile){ routine.forEach(s=>window.open(s.u,"_blank","noopener")); return; }
+  const links = routine.map(s=>`<a class="rt-open" href="${escapeHtml(s.u)}" target="_blank" rel="noopener">${escapeHtml(s.n)} <span>↗</span></a>`).join("");
+  setBanner(`<b>🚀 Ta routine du matin</b> — appuie sur chaque lien pour l'ouvrir :<div class="rt-openwrap">${links}</div>`);
 };
 renderShortcuts();
 
@@ -896,6 +904,8 @@ const REPEAT_MS={day:864e5,week:6048e5,quinzaine:1296e6}, REPEAT_LBL={day:"chaqu
 function tkReconcile(){ let ch=false; const now=Date.now(); TK_KEYS.forEach(k=>{ (TASKS[k]||[]).forEach(x=>{ if(x.repeat && !x.del && x.done && x.doneTs && (now-x.doneTs>=(REPEAT_MS[x.repeat]||864e5))){ x.done=false; x.doneTs=0; x.ts=now; x.upd=now; ch=true; } }); }); return ch; }
 function tkNorm(){ ["moi","other","general"].forEach(k=>{ if(!Array.isArray(TASKS[k])) TASKS[k]=[]; }); }
 function tkId(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+let TK_AC=null;
+function tkPop(){ try{ if(!TK_AC) TK_AC=new (window.AudioContext||window.webkitAudioContext)(); const c=TK_AC,o=c.createOscillator(),g=c.createGain(); o.type="sine"; o.frequency.setValueAtTime(880,c.currentTime); o.frequency.exponentialRampToValueAtTime(1320,c.currentTime+0.07); g.gain.setValueAtTime(0.07,c.currentTime); g.gain.exponentialRampToValueAtTime(0.0001,c.currentTime+0.16); o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime+0.18); }catch(e){} }
 let TK_LAST_EDIT = 0;
 function saveTasks(){
   tkNorm(); TK_LAST_EDIT=Date.now(); localStorage.setItem("ccs_tasks",JSON.stringify(TASKS));
@@ -959,7 +969,7 @@ function renderTasks(){
 { const tabs=$("#taskTabs"); if(tabs) tabs.addEventListener("click",e=>{ const b=e.target.closest("[data-tkview]"); if(b){ TK_VIEW=b.getAttribute("data-tkview"); localStorage.setItem("ccs_tkview",TK_VIEW); const d=$("#taskDest"); if(d) d.value=TK_VIEW; renderTasks(); } }); }
 { const list=$("#taskList"); if(list){
   list.addEventListener("click",e=>{
-    const ck=e.target.closest("[data-tkdone]"); if(ck){ const it=TASKS[TK_VIEW].find(x=>x.id===ck.getAttribute("data-tkdone")); if(it){ it.done=!it.done; if(it.done && it.repeat) it.doneTs=Date.now(); else if(!it.done) it.doneTs=0; it.upd=Date.now(); saveTasks(); renderTasks(); } return; }
+    const ck=e.target.closest("[data-tkdone]"); if(ck){ const it=TASKS[TK_VIEW].find(x=>x.id===ck.getAttribute("data-tkdone")); if(it){ it.done=!it.done; if(it.done){ if(it.repeat) it.doneTs=Date.now(); tkPop(); } else it.doneTs=0; it.upd=Date.now(); saveTasks(); renderTasks(); } return; }
     const dl=e.target.closest("[data-tkdel]"); if(dl){ const id=dl.getAttribute("data-tkdel"); const it=TASKS[TK_VIEW].find(x=>x.id===id); if(it){ it.del=true; it.upd=Date.now(); saveTasks(); renderTasks(); } return; }
   });
   list.addEventListener("change",e=>{
