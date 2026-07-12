@@ -414,6 +414,8 @@ const TOOLS = [
     metrics:[{k:"drives7d",l:"Drives 7j",f:fmtInt},{k:"views7d",l:"Vues 7j",f:fmtBig}] },
   { id:"shinra-finance",   world:"shinra", cat:"Shinra", name:"Shinra Finance",    icon:"$", openUrl:"https://fadeflux.github.io/shinra-finance/",
     metrics:[{k:"profitMonth",l:"Profit du mois",f:fmtMoney},{k:"subs",l:"Subs",f:fmtInt}] },
+  { id:"diddysms",         world:"shinra", cat:"Shinra", name:"DiddySMS", icon:"D", openUrl:"https://diddysms.com", metrics:[{k:"balance",l:"Solde",f:fmtMoney}] },
+  { id:"getatext",         world:"shinra", cat:"Shinra", name:"Getatext (secours)", icon:"G", openUrl:"https://getatext.com", metrics:[{k:"balance",l:"Solde",f:fmtMoney}] },
 ];
 
 /* Démo (tant que le cerveau n'est pas activé) — avec tendances + courbes. */
@@ -421,6 +423,8 @@ const DEMO = {
   "lola":{status:"online"},
   "clipfusion-shinra":{status:"online",metrics:{drives7d:96,views7d:1800000},series:{views7d:[210000,240000,260000,230000,280000,300000,280000]}},
   "shinra-finance":{status:"online",metrics:{profitMonth:3080,subs:412}},
+  "diddysms":{status:"online",metrics:{balance:37}},
+  "getatext":{status:"online",metrics:{balance:8}},
 };
 
 /* ---------- état ---------- */
@@ -503,8 +507,11 @@ function groups(){
   return out;
 }
 
+let SMS_DATA=null;
+async function loadSms(){ if(!TOKEN) return; try{ const r=await fetch(HUB_BASE+"/api/hub/sms",{headers:{"x-hub-token":TOKEN}}); if(r.ok){ const j=await r.json(); SMS_DATA=j.sms||null; if(typeof LAST!=="undefined"&&LAST) render(LAST); } }catch(e){} }
 function render(data){
   LAST = data;
+  if(typeof SMS_DATA!=="undefined" && SMS_DATA){ ["diddysms","getatext"].forEach(id=>{ const s=SMS_DATA[id]; if(s && s.balance!=null){ data[id]=data[id]||{}; data[id].status="online"; data[id].metrics=Object.assign({},data[id].metrics,{balance:s.balance}); } }); }
   $("#sections").innerHTML = groups().map(g=>{
     const cards = g.tools.map(t=>cardHTML(t,data)).join("");
     return `<div class="section ${g.build?"build":""}">
@@ -618,7 +625,15 @@ $("#sections").addEventListener("click", e=>{
 function openGate(msg){ $("#gate").classList.add("show"); $("#pwErr").textContent=msg||""; setTimeout(()=>$("#pw").focus(),50); }
 function closeGate(){ $("#gate").classList.remove("show"); }
 $("#unlock").onclick = ()=>openGate();
-$("#pwGo").onclick = ()=>{ TOKEN=$("#pw").value.trim(); localStorage.setItem("ccs_token",TOKEN); closeGate(); load(); loadTodosFromBrain(); loadJournal(); loadTasks(); };
+async function doLogin(){
+  const input=$("#pw").value.trim(); if(!input) return;
+  const go=$("#pwGo"); go.disabled=true; go.textContent="…";
+  let tok=input;
+  try{ const r=await fetch(HUB_BASE+"/api/hub/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({password:input})}); if(r.ok){ const j=await r.json(); if(j.token) tok=j.token; } }catch(e){}
+  go.disabled=false; go.textContent="Entrer";
+  TOKEN=tok; localStorage.setItem("ccs_token",TOKEN); closeGate(); load(); loadTodosFromBrain(); loadJournal(); loadTasks(); loadSms();
+}
+$("#pwGo").onclick = doLogin;
 $("#pw").addEventListener("keydown",e=>{ if(e.key==="Enter")$("#pwGo").click(); });
 $("#refresh").onclick = load;
 
@@ -1009,6 +1024,7 @@ load();
 loadTodosFromBrain();
 loadJournal();
 loadTasks();
+loadSms();
 setInterval(()=>{ if(!$("#gate").classList.contains("show")){ load(); loadJournal(); } }, REFRESH_MS);
 </script>
 </body>
