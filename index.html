@@ -630,7 +630,7 @@ async function load(){
       if(OFFLINE_FAILS>=2){ $("#sub").textContent="Reconnexion…"; setBanner("📶 Reconnexion en cours… tes chiffres restent affichés."); }
       if(!OFFLINE_TIMER) OFFLINE_TIMER=setTimeout(()=>{ OFFLINE_TIMER=null; load(); }, 7000);
     } else {
-      demoFallback(`<b>Chiffres d'exemple</b> — clique « 🔒 Mes chiffres » pour afficher tes vrais chiffres (une fois le cerveau activé).`);
+      demoFallback(`<b>Chiffres d'exemple</b> — reconnecte-toi pour afficher tes vrais chiffres.`);
     }
   }finally{
     LOADING=false;
@@ -1011,7 +1011,7 @@ async function doAsk(q){
   $("#askAns").className="ask-ans muted"; $("#askAns").textContent="L'assistant réfléchit…";
   try{
     const r=await fetch(HUB_BASE+"/api/hub/agent",{method:"POST",headers:{"content-type":"application/json","x-hub-token":TOKEN},body:JSON.stringify({message:q, names:NAMES})});
-    if(r.status===401){ $("#askAns").className="ask-ans muted"; $("#askAns").textContent="Token incorrect — reconnecte-toi via « 🔒 Mes chiffres »."; openGate("Recolle le bon token du site (pas le token Railway)."); if(go){go.disabled=false;go.textContent="Envoyer";} return; }
+    if(r.status===401){ $("#askAns").className="ask-ans muted"; $("#askAns").textContent="Reconnecte-toi."; openGate("🔑 Reconnecte-toi (identifiant + mot de passe)."); if(go){go.disabled=false;go.textContent="Envoyer";} return; }
     const j=await r.json();
     $("#askAns").className="ask-ans"; $("#askAns").textContent=j.answer||j.error||"Pas de réponse.";
     if(j.reloadTasks) loadTasks();
