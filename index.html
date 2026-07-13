@@ -594,25 +594,46 @@ function demoFallback(msg){
   setBanner(msg);
   if(HUB_URL) $("#unlock").style.display = "inline-flex";
 }
+let LOADING=false, OFFLINE_FAILS=0, OFFLINE_TIMER=null;
 async function load(){
+  if(LOADING) return;
+  LOADING=true;
   const rico = $("#rico"); rico.classList.add("spin");
   try{
     if(!HUB_URL){ demoFallback(`<b>Mode démo</b> — chiffres d'exemple. Le « cerveau » n'est pas encore branché.`); return; }
-    const r = await fetch(HUB_URL,{headers:{"x-hub-token":TOKEN},cache:"no-store"});
-    if(!r.ok) throw new Error("HTTP "+r.status);
-    const j = await r.json();
+    let j=null, lastErr=null;
+    for(let attempt=0; attempt<3; attempt++){
+      try{
+        const r = await fetch(HUB_URL,{headers:{"x-hub-token":TOKEN},cache:"no-store"});
+        if(!r.ok) throw new Error("HTTP "+r.status);
+        j = await r.json(); break;
+      }catch(e){ lastErr=e; if(attempt<2) await new Promise(res=>setTimeout(res,1200*(attempt+1))); }
+    }
+    if(!j) throw (lastErr||new Error("offline"));
+    OFFLINE_FAILS=0; if(OFFLINE_TIMER){ clearTimeout(OFFLINE_TIMER); OFFLINE_TIMER=null; }
     IS_LIVE = true;
     render(j.tools||{});
+    try{ localStorage.setItem("ccs_lastdata", JSON.stringify(j.tools||{})); }catch(_){}
     $("#sub").textContent = "Mis à jour à l'instant";
     $("#footnote").textContent = new Date().toLocaleString("fr-FR");
     setBanner("");
     $("#unlock").style.display = "none";
   }catch(e){
-    demoFallback(`<b>Chiffres d'exemple</b> — clique « 🔒 Mes chiffres » pour afficher tes vrais chiffres (une fois le cerveau activé).`);
+    OFFLINE_FAILS++;
+    let cached=null; try{ cached = TOKEN ? JSON.parse(localStorage.getItem("ccs_lastdata")||"null") : null; }catch(_){}
+    if(cached){
+      IS_LIVE=true; render(cached);
+      if(OFFLINE_FAILS>=2){ $("#sub").textContent="Reconnexion…"; setBanner("📶 Reconnexion en cours… tes chiffres restent affichés."); }
+      if(!OFFLINE_TIMER) OFFLINE_TIMER=setTimeout(()=>{ OFFLINE_TIMER=null; load(); }, 7000);
+    } else {
+      demoFallback(`<b>Chiffres d'exemple</b> — clique « 🔒 Mes chiffres » pour afficher tes vrais chiffres (une fois le cerveau activé).`);
+    }
   }finally{
+    LOADING=false;
     rico.classList.remove("spin");
   }
 }
+window.addEventListener("online", function(){ OFFLINE_FAILS=0; if(!$("#gate").classList.contains("show")) load(); });
 
 /* ---------- épinglage ---------- */
 function togglePin(id){
