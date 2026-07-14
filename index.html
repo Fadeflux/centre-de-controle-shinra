@@ -137,16 +137,16 @@
   .tk-tab{font:inherit;font-size:13px;padding:6px 11px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);cursor:pointer}
   .tk-tab.on{background:var(--acc);border-color:var(--acc);color:#04120a}
   .tk-n{background:rgba(0,0,0,.2);border-radius:999px;padding:0 5px;font-size:11px;margin-left:3px}
-  .tk-add{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
-  .tk-add input{flex:1;min-width:120px;font:inherit;font-size:14px;padding:9px 11px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--text);outline:none}
-  .tk-add .tk-tags-in{flex:0 1 140px}
-  .tk-opts-btn{font:inherit;font-size:15px;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 11px;cursor:pointer;color:var(--muted);flex:0 0 auto}
-  .tk-opts-btn.on{border-color:var(--acc);color:var(--acc)}
-  .tk-adv{margin-bottom:12px;display:flex;flex-direction:column;gap:8px}
-  .tk-adv-row{display:flex;gap:6px;flex-wrap:wrap}
-  .tk-adv-row input,.tk-adv-row select{flex:1;min-width:110px;font:inherit;font-size:14px;padding:9px 11px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--text);outline:none}
-  .tk-dest{font:inherit;font-size:13px;padding:0 9px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--text);outline:none}
-  #taskAdd{margin:0;padding:9px 15px;font:inherit;font-size:15px;border:0;border-radius:9px;background:var(--acc);color:#04120a;font-weight:700;cursor:pointer}
+  .tk-add{display:flex;gap:8px;align-items:stretch;margin-bottom:10px}
+  .tk-add input{flex:1;min-width:0;font:inherit;font-size:14px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);outline:none}
+  .tk-add input:focus{border-color:var(--acc)}
+  .tk-opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:8px;margin-bottom:10px}
+  .tk-field{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .tk-field>span{font-size:10.5px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);padding-left:2px}
+  .tk-field select,.tk-field input{width:100%;font:inherit;font-size:13.5px;padding:9px 10px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--text);outline:none;cursor:pointer}
+  .tk-field input{cursor:text}
+  .tk-field select:focus,.tk-field input:focus{border-color:var(--acc)}
+  #taskAdd{margin:0;padding:0 18px;font:inherit;font-size:20px;line-height:1;flex:0 0 auto;border:0;border-radius:10px;background:var(--acc);color:#04120a;font-weight:700;cursor:pointer}
   .tk-row{display:flex;align-items:flex-start;gap:9px;padding:9px 0;border-bottom:.5px solid var(--line)}
   .tk-row:last-child{border-bottom:0}
   .tk-ck{background:none;border:0;cursor:pointer;font-size:16px;line-height:1.3;padding:0;transition:transform .12s ease}
@@ -341,15 +341,12 @@
     <div class="tk-tabs" id="taskTabs"></div>
     <div class="tk-add">
       <input id="taskText" placeholder="Nouvelle tâche ou idée…" autocomplete="off" />
-      <select id="taskDest" class="tk-dest" title="Pour qui ?"></select>
-      <button id="taskAddOpts" class="tk-opts-btn" title="Plus d'options (tags, répétition)">⚙️</button>
-      <button id="taskAdd">＋</button>
+      <button id="taskAdd" title="Ajouter">＋</button>
     </div>
-    <div class="tk-adv" id="taskAdv" style="display:none">
-      <div class="tk-adv-row">
-        <input id="taskTags" class="tk-tags-in" placeholder="tags (ex: urgent)" autocomplete="off" />
-        <select id="taskRepeat" class="tk-dest" title="Répétition"><option value="">une fois</option><option value="day">🔁 chaque jour</option><option value="week">🔁 chaque semaine</option><option value="quinzaine">🔁 chaque quinzaine</option></select>
-      </div>
+    <div class="tk-opts">
+      <label class="tk-field"><span>👤 Pour qui</span><select id="taskDest" title="Pour qui ?"></select></label>
+      <label class="tk-field"><span>🔁 Répétition</span><select id="taskRepeat" title="Répétition"><option value="">Une fois</option><option value="day">Chaque jour</option><option value="week">Chaque semaine</option><option value="quinzaine">Chaque quinzaine</option></select></label>
+      <label class="tk-field"><span>🏷️ Tags</span><input id="taskTags" placeholder="ex : urgent" autocomplete="off" /></label>
     </div>
     <div id="taskList"></div>
   </div>
@@ -1000,11 +997,6 @@ function renderTasks(){
   }).join("")) : `<div class="tk-empty">Rien ici — ajoute une tâche 👆</div>`;
 }
 { const a=$("#taskAdd"); if(a) a.onclick=addTask; }
-{ const o=$("#taskAddOpts"), adv=$("#taskAdv");
-  const setAdv=(open)=>{ if(adv) adv.style.display=open?"flex":"none"; if(o) o.classList.toggle("on",open); localStorage.setItem("ccs_tkadv",open?"1":"0"); };
-  if(o) o.onclick=()=>setAdv(adv && adv.style.display==="none");
-  if(localStorage.getItem("ccs_tkadv")==="1") setAdv(true);
-}
 { const t=$("#taskText"); if(t) t.addEventListener("keydown",e=>{ if(e.key==="Enter") addTask(); }); }
 { const tabs=$("#taskTabs"); if(tabs) tabs.addEventListener("click",e=>{ const b=e.target.closest("[data-tkview]"); if(b){ TK_VIEW=b.getAttribute("data-tkview"); localStorage.setItem("ccs_tkview",TK_VIEW); const d=$("#taskDest"); if(d) d.value=TK_VIEW; renderTasks(); } }); }
 { const list=$("#taskList"); if(list){
@@ -1093,9 +1085,40 @@ function speakBriefing(){
     let p=[hi+" "+name+"."];
     if(profit && !(typeof HIDE!=="undefined"&&HIDE)) p.push("Profit du mois : "+Math.round(profit)+" dollars.");
     p.push(undone?(undone+" tâche"+(undone>1?"s":"")+" à faire."):"Aucune tâche en attente.");
-    const u=new SpeechSynthesisUtterance(p.join(" ")); u.lang="fr-FR"; window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
+    const u=new SpeechSynthesisUtterance(p.join(" ")); u.lang="fr-FR"; const v=pickFrenchVoice(); if(v) u.voice=v; u.rate=1; u.pitch=1.02;
+    const doSpeak=()=>{ window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); };
+    const vs=window.speechSynthesis.getVoices(); if(vs&&vs.length) doSpeak(); else { window.speechSynthesis.onvoiceschanged=doSpeak; setTimeout(doSpeak,600); }
   }catch(e){}
 }
+var _voiceCache=null;
+function pickFrenchVoice(){
+  try{
+    const vs=(window.speechSynthesis.getVoices())||[];
+    if(_voiceCache && vs.indexOf(_voiceCache)>=0) return _voiceCache;
+    let fr=vs.filter(v=>/fr(-|_|$)/i.test(v.lang||""));
+    if(!fr.length) fr=vs.filter(v=>/fr/i.test(v.lang||""));
+    if(!fr.length) return null;
+    const score=(v)=>{
+      const n=(v.name||"").toLowerCase(), u=(v.voiceURI||"").toLowerCase(); let s=0;
+      if(/online.*natural|natural.*online/.test(n)) s+=100;
+      if(/neural/.test(n)) s+=90;
+      if(/google/.test(n)) s+=80;
+      if(/enhanced|premium/.test(n)) s+=70;
+      if(/siri/.test(n)) s+=55;
+      if(/aur[eé]lie|am[eé]lie|audrey|virginie|c[eé]line|charlotte|brigitte|julie|marie|l[eé]a|denise/.test(n)) s+=20;
+      if(/female|femme/.test(n)) s+=6;
+      if(/fr-fr/i.test(v.lang||"")||/fr[-_]fr/.test(u)) s+=8;
+      if(!v.localService) s+=4;
+      if(/compact|eloquence|espeak|pico/.test(n)) s-=40;
+      if(/hortense/.test(n)) s-=8;
+      return s;
+    };
+    fr.sort((a,b)=>score(b)-score(a));
+    _voiceCache=fr[0]||null;
+    return _voiceCache;
+  }catch(e){ return null; }
+}
+try{ if(window.speechSynthesis){ window.speechSynthesis.getVoices(); if(typeof window.speechSynthesis.addEventListener==="function") window.speechSynthesis.addEventListener("voiceschanged",function(){ _voiceCache=null; window.speechSynthesis.getVoices(); }); } }catch(e){}
 function showMorning(){ renderMorning(); $("#morning").classList.add("show"); }
 function closeMorning(){ $("#morning").classList.remove("show"); localStorage.setItem("ccs_morning",todayStr()); }
 function showMorningIfNew(){ if(!TOKEN) return; if(MORNING_SHOWN) return; MORNING_SHOWN=true; if(localStorage.getItem("ccs_morning")!==todayStr()) showMorning(); }
