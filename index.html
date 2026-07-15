@@ -1111,19 +1111,51 @@ function speakBriefing(){
 // Voix NEURONALE serveur (Gemini) : belle voix identique sur tous les appareils. Renvoie true si elle a joué.
 const _TTS_SILENT="data:audio/wav;base64,UklGRlQAAABXQVZFZm10IBAAAAABAAEAwF0AAIC7AAACABAAZGF0YTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 let _ttsAudio=null;
-async function speakServer(text){
+// Streaming par phrases : joue la 1ère dès qu'elle est prête et prépare les suivantes en fond (démarrage rapide + cache).
+const _ttsCacheCli={};
+let _speakSeq=0;
+function ttsChunks(text){
+  const parts=String(text||"").replace(/\s+/g," ").trim().match(/[^.!?…]+[.!?…]*/g)||[String(text||"")];
+  const out=[]; let cur="";
+  parts.forEach(p=>{ p=p.trim(); if(!p) return; if((cur+" "+p).trim().length>150 && cur){ out.push(cur.trim()); cur=p; } else cur=(cur?cur+" ":"")+p; });
+  if(cur.trim()) out.push(cur.trim());
+  return out.length?out:[String(text||"")];
+}
+async function ttsFetch(text){
+  text=String(text||"").slice(0,1600); if(!TOKEN || !text) return null;
+  if(_ttsCacheCli[text]) return _ttsCacheCli[text];
+  if(navigator && navigator.onLine===false) return null;
   try{
-    if(!TOKEN || !text) return false;
-    if(navigator && navigator.onLine===false) return false;
-    try{ window.speechSynthesis && window.speechSynthesis.cancel(); }catch(e){}
-    const r=await fetch(HUB_BASE+"/api/hub/tts",{method:"POST",headers:{"content-type":"application/json","x-hub-token":TOKEN},body:JSON.stringify({text:String(text).slice(0,1600)})});
-    if(!r.ok) return false;
-    const j=await r.json(); if(!j.audio) return false;
-    if(!_ttsAudio) _ttsAudio=new Audio();
-    _ttsAudio.src="data:audio/wav;base64,"+j.audio;
-    await _ttsAudio.play();
-    return true;
-  }catch(e){ return false; }
+    const r=await fetch(HUB_BASE+"/api/hub/tts",{method:"POST",headers:{"content-type":"application/json","x-hub-token":TOKEN},body:JSON.stringify({text})});
+    if(!r.ok) return null;
+    const j=await r.json(); if(!j.audio) return null;
+    _ttsCacheCli[text]=j.audio; return j.audio;
+  }catch(e){ return null; }
+}
+async function speakServer(text){
+  if(!TOKEN || !text) return false;
+  if(navigator && navigator.onLine===false) return false;
+  const seq=++_speakSeq;
+  try{ window.speechSynthesis && window.speechSynthesis.cancel(); }catch(e){}
+  const chunks=ttsChunks(text);
+  let nextP=ttsFetch(chunks[0]);
+  const first=await nextP;
+  if(seq!==_speakSeq) return true;
+  if(!first) return false;
+  if(!_ttsAudio) _ttsAudio=new Audio();
+  let played=false;
+  for(let i=0;i<chunks.length;i++){
+    if(seq!==_speakSeq) return true;
+    const audio = i===0 ? first : await nextP;
+    if(i+1<chunks.length) nextP=ttsFetch(chunks[i+1]);
+    if(!audio) continue;
+    played=true;
+    await new Promise(res=>{
+      try{ _ttsAudio.onended=res; _ttsAudio.onerror=res; _ttsAudio.src="data:audio/wav;base64,"+audio; const p=_ttsAudio.play(); if(p&&p.catch) p.catch(()=>res()); }
+      catch(e){ res(); }
+    });
+  }
+  return played;
 }
 var _voiceCache=null;
 function pickFrenchVoice(){
