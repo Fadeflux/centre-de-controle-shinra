@@ -1103,10 +1103,27 @@ function speakBriefing(){
     let p=[hi+" "+name+"."];
     if(profit && !(typeof HIDE!=="undefined"&&HIDE)) p.push("Profit du mois : "+Math.round(profit)+" dollars.");
     p.push(undone?(undone+" tâche"+(undone>1?"s":"")+" à faire."):"Aucune tâche en attente.");
-    const u=new SpeechSynthesisUtterance(p.join(" ")); u.lang="fr-FR"; const v=pickFrenchVoice(); if(v) u.voice=v; u.rate=0.97; u.pitch=1.05;
-    const doSpeak=()=>{ window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); };
-    const vs=window.speechSynthesis.getVoices(); if(vs&&vs.length) doSpeak(); else { window.speechSynthesis.onvoiceschanged=doSpeak; setTimeout(doSpeak,600); }
+    const text=p.join(" ");
+    // Essaie la belle voix serveur (Gemini) ; sinon retombe sur la voix du téléphone.
+    speakServer(text).then(function(ok){ if(!ok){ try{ const u=new SpeechSynthesisUtterance(text); u.lang="fr-FR"; const v=pickFrenchVoice(); if(v) u.voice=v; u.rate=0.97; u.pitch=1.05; window.speechSynthesis.cancel(); const doSpeak=()=>window.speechSynthesis.speak(u); const vs=window.speechSynthesis.getVoices(); if(vs&&vs.length) doSpeak(); else { window.speechSynthesis.onvoiceschanged=doSpeak; setTimeout(doSpeak,600); } }catch(e){} } });
   }catch(e){}
+}
+// Voix NEURONALE serveur (Gemini) : belle voix identique sur tous les appareils. Renvoie true si elle a joué.
+const _TTS_SILENT="data:audio/wav;base64,UklGRlQAAABXQVZFZm10IBAAAAABAAEAwF0AAIC7AAACABAAZGF0YTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+let _ttsAudio=null;
+async function speakServer(text){
+  try{
+    if(!TOKEN || !text) return false;
+    if(navigator && navigator.onLine===false) return false;
+    try{ window.speechSynthesis && window.speechSynthesis.cancel(); }catch(e){}
+    const r=await fetch(HUB_BASE+"/api/hub/tts",{method:"POST",headers:{"content-type":"application/json","x-hub-token":TOKEN},body:JSON.stringify({text:String(text).slice(0,1600)})});
+    if(!r.ok) return false;
+    const j=await r.json(); if(!j.audio) return false;
+    if(!_ttsAudio) _ttsAudio=new Audio();
+    _ttsAudio.src="data:audio/wav;base64,"+j.audio;
+    await _ttsAudio.play();
+    return true;
+  }catch(e){ return false; }
 }
 var _voiceCache=null;
 function pickFrenchVoice(){
@@ -1139,7 +1156,10 @@ function pickFrenchVoice(){
 try{ if(window.speechSynthesis){ window.speechSynthesis.getVoices(); if(typeof window.speechSynthesis.addEventListener==="function") window.speechSynthesis.addEventListener("voiceschanged",function(){ _voiceCache=null; window.speechSynthesis.getVoices(); }); } }catch(e){}
 // Réveille le moteur vocal au 1er geste (iOS n'expose les bonnes voix qu'après) -> voix correcte dès la 1ère phrase.
 let _voicePrimed=false;
-function primeVoices(){ if(_voicePrimed) return; _voicePrimed=true; try{ const ss=window.speechSynthesis; if(!ss) return; ss.getVoices(); const u=new SpeechSynthesisUtterance(" "); u.volume=0; ss.speak(u); ss.cancel(); }catch(e){} }
+function primeVoices(){ if(_voicePrimed) return; _voicePrimed=true;
+  try{ const ss=window.speechSynthesis; if(ss){ ss.getVoices(); const u=new SpeechSynthesisUtterance(" "); u.volume=0; ss.speak(u); ss.cancel(); } }catch(e){}
+  try{ if(!_ttsAudio) _ttsAudio=new Audio(); _ttsAudio.src=_TTS_SILENT; const p=_ttsAudio.play(); if(p&&p.then) p.then(()=>{ try{ _ttsAudio.pause(); _ttsAudio.currentTime=0; }catch(e){} }).catch(()=>{}); }catch(e){}
+}
 ["pointerdown","touchstart","keydown"].forEach(ev=>window.addEventListener(ev, primeVoices, {once:true, passive:true}));
 function showMorning(){ renderMorning(); $("#morning").classList.add("show"); }
 function closeMorning(){ $("#morning").classList.remove("show"); localStorage.setItem("ccs_morning",todayStr()); }
