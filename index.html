@@ -132,21 +132,31 @@
   .jr-head{font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;margin-bottom:12px}
   .tkbox{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:15px 16px;margin-bottom:26px}
   .tkbox-head{font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;margin-bottom:2px}
-  .tk-who{margin-left:auto;font:inherit;font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);outline:none}
+  /* Badge d'identité (issu du login) — remplace l'ancien select "Je suis" */
+  .tk-me{margin-left:auto;display:inline-flex;align-items:center;gap:9px;padding:5px 12px 5px 6px;border-radius:999px;background:var(--acc-bg);border:1px solid var(--acc-line);cursor:default;user-select:none;white-space:nowrap;max-width:62%}
+  .tk-me-av{width:26px;height:26px;flex:0 0 auto;display:grid;place-items:center;font-size:15px;border-radius:50%;background:color-mix(in srgb, var(--acc) 22%, transparent);border:1px solid var(--acc-line)}
+  .tk-me-txt{display:flex;flex-direction:column;line-height:1.05;min-width:0}
+  .tk-me-lbl{font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--acc-ink);opacity:.85}
+  .tk-me-txt b{font-size:13px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;max-width:120px}
   .tk-tabs{display:flex;gap:6px;margin:10px 0 12px;flex-wrap:wrap}
   .tk-tab{font:inherit;font-size:13px;padding:6px 11px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);cursor:pointer}
   .tk-tab.on{background:var(--acc);border-color:var(--acc);color:#04120a}
   .tk-n{background:rgba(0,0,0,.2);border-radius:999px;padding:0 5px;font-size:11px;margin-left:3px}
   .tk-add{display:flex;gap:8px;align-items:stretch;margin-bottom:10px}
   .tk-add input{flex:1;min-width:0;font:inherit;font-size:14px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);outline:none}
-  .tk-add input:focus{border-color:var(--acc)}
-  .tk-opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:8px;margin-bottom:10px}
+  /* Encart léger qui regroupe les réglages (mieux structuré, tout visible) */
+  .tk-opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:10px;padding:12px;background:color-mix(in srgb, var(--acc) 4%, var(--surface-2));border:1px solid var(--line);border-radius:11px}
+  .tk-opts-lead{grid-column:1/-1;font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:-2px 0 2px}
   .tk-field{display:flex;flex-direction:column;gap:4px;min-width:0}
   .tk-field>span{font-size:10.5px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);padding-left:2px}
   .tk-field select,.tk-field input{width:100%;font:inherit;font-size:13.5px;padding:9px 10px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--text);outline:none;cursor:pointer}
   .tk-field input{cursor:text}
-  .tk-field select:focus,.tk-field input:focus{border-color:var(--acc)}
-  #taskAdd{margin:0;padding:0 18px;font:inherit;font-size:20px;line-height:1;flex:0 0 auto;border:0;border-radius:10px;background:var(--acc);color:#04120a;font-weight:700;cursor:pointer}
+  .tk-field:has(#taskTags){grid-column:1 / -1}
+  .tk-add input,.tk-add #taskAdd,.tk-field select,.tk-field input{min-height:44px}
+  .tk-add input:focus,.tk-field select:focus,.tk-field input:focus{border-color:var(--acc);box-shadow:0 0 0 3px color-mix(in srgb, var(--acc) 22%, transparent)}
+  #taskAdd{margin:0;padding:0 20px;font:inherit;font-size:22px;line-height:1;flex:0 0 auto;border:1px solid var(--acc);border-radius:10px;background:var(--acc);color:#04120a;font-weight:700;cursor:pointer;transition:.15s}
+  #taskAdd:hover{background:var(--acc-hover);border-color:var(--acc-hover)}
+  #taskAdd:active{transform:translateY(1px)}
   .tk-row{display:flex;align-items:flex-start;gap:9px;padding:9px 0;border-bottom:.5px solid var(--line)}
   .tk-row:last-child{border-bottom:0}
   .tk-ck{background:none;border:0;cursor:pointer;font-size:16px;line-height:1.3;padding:0;transition:transform .12s ease}
@@ -336,7 +346,10 @@
 
   <div class="tkbox tasks-hero" id="tasks">
     <div class="tkbox-head">✅ Tâches d'équipe
-      <select id="taskWho" class="tk-who" title="Qui es-tu ?"></select>
+      <div class="tk-me" title="Ton identité (définie par ta connexion)" aria-label="Identité">
+        <span class="tk-me-av" id="taskMeAv">🧑‍💻</span>
+        <span class="tk-me-txt"><span class="tk-me-lbl">Je suis</span><b id="taskMeName">—</b></span>
+      </div>
     </div>
     <div class="tk-tabs" id="taskTabs"></div>
     <div class="tk-add">
@@ -344,6 +357,7 @@
       <button id="taskAdd" title="Ajouter">＋</button>
     </div>
     <div class="tk-opts">
+      <div class="tk-opts-lead">⚙️ Réglages de la tâche</div>
       <label class="tk-field"><span>👤 Pour qui</span><select id="taskDest" title="Pour qui ?"></select></label>
       <label class="tk-field"><span>🔁 Répétition</span><select id="taskRepeat" title="Répétition"><option value="">Une fois</option><option value="day">Chaque jour</option><option value="week">Chaque semaine</option><option value="quinzaine">Chaque quinzaine</option></select></label>
       <label class="tk-field"><span>🏷️ Tags</span><input id="taskTags" placeholder="ex : urgent" autocomplete="off" /></label>
@@ -669,12 +683,13 @@ async function doLogin(){
   let tok="", who=null, name="";
   try{
     const r=await fetch(HUB_BASE+"/api/hub/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({username:user, password:input})});
-    if(r.ok){ const j=await r.json(); if(j.token){ tok=j.token; who=j.who||null; name=j.name||""; } }
+    if(r.ok){ const j=await r.json(); if(j.token){ tok=j.token; who=j.who||null; name=j.name||""; if(!who){ who=whoFromUser(j.username||user); } } }
   }catch(e){}
   go.disabled=false; go.textContent="Entrer";
   if(!tok){ $("#pwErr").textContent="Identifiant ou mot de passe incorrect."; return; }
   TOKEN=tok; localStorage.setItem("ccs_token",TOKEN);
-  if(who){ WHO=who; localStorage.setItem("ccs_who",WHO); TK_VIEW=WHO; localStorage.setItem("ccs_tkview",WHO); }
+  if(!who) who=whoFromUser(user);
+  if(who){ WHO=who; localStorage.setItem("ccs_who",WHO); TK_VIEW=WHO; localStorage.setItem("ccs_tkview",WHO); fillMe(); const s=$("#taskDest"); if(s) s.value=WHO; }
   if(name){ CURRENT_USER=name; localStorage.setItem("ccs_name",name); }
   closeGate(); load(); loadTodosFromBrain(); loadJournal(); loadTasks(); loadSms();
 }
@@ -925,6 +940,10 @@ $("#push").onclick=enablePush;
 /* ---------- démarrage ---------- */
 /* ---------- tâches d'équipe (3 listes + tags, sync serveur) ---------- */
 const NAMES = { moi:"Andre", other:"Ghoulz" };   // Shinra ; côté Noctra = { moi:"Andre", other:"Manon" }
+const AVATARS = { moi:"🧑‍💻", other:"🧑‍🚀" };
+// Identité = login : "andre" -> moi, "ghoulz" -> other (dérivé du nom d'utilisateur si le serveur ne le donne pas)
+function whoFromUser(u){ const ul=String(u||"").toLowerCase().trim(); for(const k in NAMES){ if((NAMES[k]||"").toLowerCase()===ul) return k; } return null; }
+function fillMe(){ try{ const w=(typeof WHO!=="undefined")?WHO:"moi"; const el=document.getElementById("taskMeName"); if(el) el.textContent=NAMES[w]||"—"; const av=document.getElementById("taskMeAv"); if(av) av.textContent=AVATARS[w]||"🙂"; }catch(e){} }
 const TK_KEYS = ["moi","other","general"];
 let WHO = localStorage.getItem("ccs_who") || "moi";
 let TASKS = JSON.parse(localStorage.getItem("ccs_tasks")||"null") || {moi:[],other:[],general:[]};
@@ -980,8 +999,7 @@ function addTask(){
 }
 function renderTasks(){
   tkNorm(); if(tkReconcile()) saveTasks();
-  const who=$("#taskWho");
-  if(who && !who.dataset.filled){ who.innerHTML=`<option value="moi">Je suis : ${escapeHtml(NAMES.moi)}</option><option value="other">Je suis : ${escapeHtml(NAMES.other)}</option>`; who.dataset.filled="1"; who.value=WHO; who.onchange=()=>{ WHO=who.value; localStorage.setItem("ccs_who",WHO); TK_VIEW=WHO; renderTasks(); }; }
+  fillMe();
   const dest=$("#taskDest");
   if(dest){ dest.innerHTML=TK_KEYS.map(k=>`<option value="${k}">${escapeHtml(tkName(k))}</option>`).join(""); dest.value=TK_VIEW; }
   const OVD=3*24*3600*1000, now=Date.now(), isLate=x=>!x.done && !x.del && x.ts && (now-x.ts>OVD);
@@ -1085,7 +1103,7 @@ function speakBriefing(){
     let p=[hi+" "+name+"."];
     if(profit && !(typeof HIDE!=="undefined"&&HIDE)) p.push("Profit du mois : "+Math.round(profit)+" dollars.");
     p.push(undone?(undone+" tâche"+(undone>1?"s":"")+" à faire."):"Aucune tâche en attente.");
-    const u=new SpeechSynthesisUtterance(p.join(" ")); u.lang="fr-FR"; const v=pickFrenchVoice(); if(v) u.voice=v; u.rate=1; u.pitch=1.02;
+    const u=new SpeechSynthesisUtterance(p.join(" ")); u.lang="fr-FR"; const v=pickFrenchVoice(); if(v) u.voice=v; u.rate=0.97; u.pitch=1.05;
     const doSpeak=()=>{ window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); };
     const vs=window.speechSynthesis.getVoices(); if(vs&&vs.length) doSpeak(); else { window.speechSynthesis.onvoiceschanged=doSpeak; setTimeout(doSpeak,600); }
   }catch(e){}
@@ -1100,16 +1118,16 @@ function pickFrenchVoice(){
     if(!fr.length) return null;
     const score=(v)=>{
       const n=(v.name||"").toLowerCase(), u=(v.voiceURI||"").toLowerCase(); let s=0;
+      const enh=/premium|enhanced|neural|natural/;
       if(/online.*natural|natural.*online/.test(n)) s+=100;
-      if(/neural/.test(n)) s+=90;
+      if(enh.test(n)||enh.test(u)) s+=85;                     // "améliorée" aussi via voiceURI
       if(/google/.test(n)) s+=80;
-      if(/enhanced|premium/.test(n)) s+=70;
-      if(/siri/.test(n)) s+=55;
+      if(/siri/.test(n)||/siri/.test(u)) s+=60;
       if(/aur[eé]lie|am[eé]lie|audrey|virginie|c[eé]line|charlotte|brigitte|julie|marie|l[eé]a|denise/.test(n)) s+=20;
-      if(/female|femme/.test(n)) s+=6;
+      if(/female|femme/.test(n)) s+=8;
       if(/fr-fr/i.test(v.lang||"")||/fr[-_]fr/.test(u)) s+=8;
       if(!v.localService) s+=4;
-      if(/compact|eloquence|espeak|pico/.test(n)) s-=40;
+      if(/compact|eloquence|espeak|pico/.test(n)||/compact/.test(u)) s-=60;
       if(/hortense/.test(n)) s-=8;
       return s;
     };
@@ -1119,6 +1137,10 @@ function pickFrenchVoice(){
   }catch(e){ return null; }
 }
 try{ if(window.speechSynthesis){ window.speechSynthesis.getVoices(); if(typeof window.speechSynthesis.addEventListener==="function") window.speechSynthesis.addEventListener("voiceschanged",function(){ _voiceCache=null; window.speechSynthesis.getVoices(); }); } }catch(e){}
+// Réveille le moteur vocal au 1er geste (iOS n'expose les bonnes voix qu'après) -> voix correcte dès la 1ère phrase.
+let _voicePrimed=false;
+function primeVoices(){ if(_voicePrimed) return; _voicePrimed=true; try{ const ss=window.speechSynthesis; if(!ss) return; ss.getVoices(); const u=new SpeechSynthesisUtterance(" "); u.volume=0; ss.speak(u); ss.cancel(); }catch(e){} }
+["pointerdown","touchstart","keydown"].forEach(ev=>window.addEventListener(ev, primeVoices, {once:true, passive:true}));
 function showMorning(){ renderMorning(); $("#morning").classList.add("show"); }
 function closeMorning(){ $("#morning").classList.remove("show"); localStorage.setItem("ccs_morning",todayStr()); }
 function showMorningIfNew(){ if(!TOKEN) return; if(MORNING_SHOWN) return; MORNING_SHOWN=true; if(localStorage.getItem("ccs_morning")!==todayStr()) showMorning(); }
@@ -1126,6 +1148,7 @@ function showMorningIfNew(){ if(!TOKEN) return; if(MORNING_SHOWN) return; MORNIN
 
 /* ---------- démarrage ---------- */
 applyAccent();
+fillMe();
 load();
 loadTodosFromBrain();
 loadJournal();
