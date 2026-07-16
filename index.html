@@ -1113,6 +1113,7 @@ const _TTS_SILENT="data:audio/wav;base64,UklGRlQAAABXQVZFZm10IBAAAAABAAEAwF0AAIC
 let _ttsAudio=null;
 // Streaming par phrases : joue la 1ère dès qu'elle est prête et prépare les suivantes en fond (démarrage rapide + cache).
 const _ttsCacheCli={};
+const _ttsInflightCli={};   // texte -> requête déjà en vol (ne jamais la demander 2 fois)
 let _speakSeq=0;
 function ttsChunks(text){
   const parts=String(text||"").replace(/\s+/g," ").trim().match(/[^.!?…]+[.!?…]*/g)||[String(text||"")];
@@ -1125,12 +1126,20 @@ async function ttsFetch(text){
   text=String(text||"").slice(0,1600); if(!TOKEN || !text) return null;
   if(_ttsCacheCli[text]) return _ttsCacheCli[text];
   if(navigator && navigator.onLine===false) return null;
-  try{
-    const r=await fetch(HUB_BASE+"/api/hub/tts",{method:"POST",headers:{"content-type":"application/json","x-hub-token":TOKEN},body:JSON.stringify({text})});
-    if(!r.ok) return null;
-    const j=await r.json(); if(!j.audio) return null;
-    _ttsCacheCli[text]=j.audio; return j.audio;
-  }catch(e){ return null; }
+  // Déjà demandé et pas encore revenu -> on attend la même réponse.
+  // Deux appels en parallèle sur le même texte = quota Gemini dépassé (502).
+  if(_ttsInflightCli[text]) return _ttsInflightCli[text];
+  const p=(async()=>{
+    try{
+      const r=await fetch(HUB_BASE+"/api/hub/tts",{method:"POST",headers:{"content-type":"application/json","x-hub-token":TOKEN},body:JSON.stringify({text})});
+      if(!r.ok) return null;
+      const j=await r.json(); if(!j.audio) return null;
+      _ttsCacheCli[text]=j.audio; return j.audio;
+    }catch(e){ return null; }
+    finally{ delete _ttsInflightCli[text]; }
+  })();
+  _ttsInflightCli[text]=p;
+  return p;
 }
 async function speakServer(text){
   if(!TOKEN || !text) return false;
