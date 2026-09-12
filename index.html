@@ -337,6 +337,7 @@
       <button class="btn" id="hide" title="Masquer les montants">👁️</button>
       <button class="btn" id="tv" title="Plein écran">⛶</button>
       <button class="btn" id="refresh"><span id="rico">↻</span> Rafraîchir</button>
+      <button class="btn" id="logout" title="Effacer l'accès de cet appareil" style="display:none">🚪 Se déconnecter</button>
     </div>
   </header>
 
@@ -378,8 +379,8 @@
 
   <div class="tkbox" id="ask">
     <div class="tkbox-head">🤖 Assistant — demande ou donne un ordre</div>
-    <div class="ask-row"><input id="askInput" placeholder="Ex : ajoute une tâche à Ghoulz, ou : redémarre Lola" autocomplete="off" /><button id="askMic" class="ask-mic" title="Dicter à la voix">🎤</button><button id="askGo">Envoyer</button></div>
-    <div class="ask-ex">Essaie : <a data-q="Ajoute une tâche pour Ghoulz : vérifier les VA">＋ tâche à Ghoulz</a> · <a data-q="Redémarre Lola">redémarrer Lola</a></div>
+    <div class="ask-row"><input id="askInput" placeholder="Ex : ajoute une tâche, ou : redémarre Lola" autocomplete="off" /><button id="askMic" class="ask-mic" title="Dicter à la voix">🎤</button><button id="askGo">Envoyer</button></div>
+    <div class="ask-ex">Essaie : <a data-nom-autre="q"><span data-nom-autre="t">＋ tâche</span></a> · <a data-q="Redémarre Lola">redémarrer Lola</a></div>
     <div class="ask-ans" id="askAns"></div>
   </div>
 
@@ -681,14 +682,16 @@ async function doLogin(){
   const user=($("#pwUser")?$("#pwUser").value.trim().toLowerCase():""), input=$("#pw").value.trim();
   if(!input){ $("#pwErr").textContent="Entre ton mot de passe."; return; }
   const go=$("#pwGo"); go.disabled=true; go.textContent="…"; $("#pwErr").textContent="";
-  let tok="", who=null, name="";
+  let tok="", who=null, name="", noms=null;
   try{
     const r=await fetch(HUB_BASE+"/api/hub/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({username:user, password:input})});
-    if(r.ok){ const j=await r.json(); if(j.token){ tok=j.token; who=j.who||null; name=j.name||""; if(!who){ who=whoFromUser(j.username||user); } } }
+    if(r.ok){ const j=await r.json(); if(j.token){ tok=j.token; who=j.who||null; name=j.name||""; noms=j.noms||null; if(!who){ who=whoFromUser(j.username||user); } } }
   }catch(e){}
   go.disabled=false; go.textContent="Entrer";
   if(!tok){ $("#pwErr").textContent="Identifiant ou mot de passe incorrect."; return; }
   TOKEN=tok; localStorage.setItem("ccs_token",TOKEN);
+  appliquerNoms(noms);   // les prénoms viennent du serveur, plus du code (dépôt public)
+  try{ majBoutonDeconnexion(); }catch(e){}
   if(!who) who=whoFromUser(user);
   if(who){ WHO=who; localStorage.setItem("ccs_who",WHO); TK_VIEW=WHO; localStorage.setItem("ccs_tkview",WHO); fillMe(); const s=$("#taskDest"); if(s) s.value=WHO; }
   if(name){ CURRENT_USER=name; localStorage.setItem("ccs_name",name); }
@@ -940,12 +943,67 @@ $("#push").onclick=enablePush;
 
 /* ---------- démarrage ---------- */
 /* ---------- tâches d'équipe (3 listes + tags, sync serveur) ---------- */
-// ⚠️ Dépôt PUBLIC. Cette ligne et les deux exemples cliquables du panneau
-// « demande » portent encore un nom : ils sont FONCTIONNELS (le rapprochement
-// du login, et une tâche réellement créée pour cette personne). Les
-// identifiants de connexion, eux, ont été retirés de la page le 12/09 —
-// les publier revenait à donner la moitié de la clef.
-const NAMES = { moi:"Andre", other:"Ghoulz" };   // Shinra ; côté Noctra = { moi:"Andre", other:"Manon" }
+// ⚠️ PLUS AUCUN PRÉNOM ÉCRIT ICI — ce dépôt est PUBLIC et la page entière est
+// servie à qui la demande. Cette ligne portait le prénom de l'opérateur et celui
+// de son associé. On ne pouvait pas seulement les effacer : ils étiquettent le
+// tableau des tâches et les exemples cliquables du panneau « demande ».
+// Ils arrivent donc du serveur, à la connexion, derrière le mot de passe —
+// `HUB_USERS` les porte déjà, rien de nouveau à configurer.
+// Avant connexion, l'écran dit « Moi » / « Associé(e) » : une étiquette honnête.
+const NAMES = { moi:"Moi", other:"Associé(e)" };
+function appliquerNoms(n){
+  if(!n || typeof n!=="object") return;
+  if(n.moi)   NAMES.moi   = String(n.moi);
+  if(n.autre) NAMES.other = String(n.autre);
+  try{ localStorage.setItem("ccs_noms", JSON.stringify({moi:NAMES.moi, autre:NAMES.other})); }catch(e){}
+  remplirExemples();
+}
+// Les exemples du panneau « demande » nomment vraiment la personne : la tâche
+// est créée pour elle quand on clique. On les REMPLIT au lieu de les écrire.
+function remplirExemples(){
+  try{
+    const nom = NAMES.other;
+    const inp = document.getElementById("askInput");
+    if(inp) inp.placeholder = "Ex : ajoute une tâche à "+nom+", ou : redémarre Lola";
+    document.querySelectorAll("[data-nom-autre]").forEach(function(el){
+      const m = el.getAttribute("data-nom-autre");
+      if(m==="q") el.setAttribute("data-q","Ajoute une tâche pour "+nom+" : vérifier les VA");
+      else el.textContent = "＋ tâche à "+nom;
+    });
+  }catch(e){}
+}
+try{ appliquerNoms(JSON.parse(localStorage.getItem("ccs_noms")||"null")); }catch(e){}
+
+/* ---------- 🚪 SE DÉCONNECTER ----------
+   ⚠️ IL N'Y AVAIT AUCUNE DÉCONNEXION DANS CETTE PAGE. `ccs_token` était écrit au
+   premier login et JAMAIS effacé : pas un seul `removeItem` dans tout le
+   fichier. Le défaut avait été trouvé et corrigé côté Noctra ; ce jumeau-ci
+   était resté ouvert. C'est de la dérive de fork sur une fonction de sécurité.
+   Conséquence : prêter ce téléphone trente secondes, c'est donner l'accès. Le
+   perdre, c'est pareil. Et si le jeton fuite, rien ne permet de le retirer de
+   l'appareil.
+   On efface le jeton ET ce que la page garde de sensible. Les réglages
+   d'affichage (panneaux épinglés, masquage, raccourcis) restent : ils ne disent
+   rien de l'argent, et les retaper à chaque connexion serait pénible. */
+const _CLES_SENSIBLES = ["ccs_token","ccs_who","ccs_name","ccs_noms","ccs_costs",
+  "ccs_lastdata","ccs_tasks","ccs_todos","ccs_streak","ccs_morning"];
+function seDeconnecter(){
+  try{
+    if(!confirm("Se déconnecter de cet appareil ?\n\n"
+      +"Il faudra retaper le mot de passe pour revoir tes chiffres. "
+      +"À faire si tu prêtes ce téléphone, ou sur un ordinateur qui n'est pas le tien.")) return;
+    _CLES_SENSIBLES.forEach(function(k){ try{ localStorage.removeItem(k); }catch(e){} });
+  }catch(e){}
+  location.reload();
+}
+{ const b=document.getElementById("logout"); if(b) b.onclick=seDeconnecter; }
+// Le bouton n'apparaît QUE si on est connecté : proposer « se déconnecter » à
+// quelqu'un qui ne l'est pas, c'est du bruit qui fait douter de l'écran.
+function majBoutonDeconnexion(){
+  try{ const b=document.getElementById("logout");
+       if(b) b.style.display = (typeof TOKEN!=="undefined" && TOKEN) ? "" : "none"; }catch(e){}
+}
+majBoutonDeconnexion();
 const AVATARS = { moi:"🧑‍💻", other:"🧑‍🚀" };
 // Identité = login : le nom d'utilisateur est rapproché de NAMES ci-dessus
 // (dérivé du nom d'utilisateur si le serveur ne le donne pas). Les identifiants
