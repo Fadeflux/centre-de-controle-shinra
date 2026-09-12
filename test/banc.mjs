@@ -260,5 +260,45 @@ console.log("\n== 7. la synchro du tableau se tait quand l'onglet est caché =="
   }
 }
 
+console.log("\n== 8. carte du jour, écran « Bonjour » et voix lisent VRAIMENT le profit ==");
+{
+  // ⚠️ 13/09 : la lecture des métriques (`gg`) vivait DANS render(). La carte du
+  // jour, l'écran du matin et le briefing vocal l'appelaient aussi : hors de
+  // render(), ReferenceError avalé par leur try, et « Profit du mois : 0 $ »
+  // affiché — et partagé en image — quel que soit le vrai chiffre.
+  const LAST_PLEIN = { "shinra-finance": { metrics: { profitMonth: 1234, subs: 56 } } };
+  const fMet = morceau("function metrique(", "\nconst fmtMoney") || "";
+  const fSafe = morceau("function ggSafe(", "\nfunction makeDayCard(");
+  V("la carte du jour a sa lecture", !!fSafe);
+  if (fSafe) {
+    const lire = (last) => new Function("LAST", fMet + "\n" + fSafe + "\n; return ggSafe;")(last);
+    V("la carte du jour lit le profit réel (pas 0)", lire(LAST_PLEIN)("shinra-finance", "profitMonth") === 1234,
+      "lu : " + lire(LAST_PLEIN)("shinra-finance", "profitMonth"));
+    V("une métrique ABSENTE reste inconnue (null → « — »), pas 0", lire({})("shinra-finance", "profitMonth") === null,
+      "lu : " + lire({})("shinra-finance", "profitMonth"));
+  }
+  const fMatin = morceau("function renderMorning(){", "\nfunction speakBriefing(");
+  V("l'écran du matin est là", !!fMatin);
+  if (fMatin) {
+    const ecranPour = (last) => {
+      const elts = {};
+      const $ = (s) => (elts[s] ||= { innerHTML: "", textContent: "", onclick: null });
+      new Function("$", "LAST", "HIDE", "NAMES", "WHO", "TASKS", "LAST_NA", "computeStreak", "escapeHtml", "animateCount", "closeMorning", "speakBriefing",
+        fMet + "\n" + fMatin + "\n; return renderMorning;")($, last, false, { moi: "Test" }, "moi", { moi: [], general: [] }, null,
+        () => 0, (x) => String(x), () => {}, () => {}, () => {})();
+      return elts["#morningBody"].innerHTML;
+    };
+    const plein = /id="mnMoney">([^<]*)</.exec(ecranPour(LAST_PLEIN));
+    V("« Bonjour » affiche le profit réel", !!plein && /1\D?234/.test(plein[1]), "affiché : " + (plein && plein[1]));
+    const vide = /id="mnMoney">([^<]*)</.exec(ecranPour({}));
+    V("« Bonjour » sans donnée affiche « — », pas « 0 $ »", !!vide && vide[1] === "—", "affiché : " + (vide && vide[1]));
+  }
+  // Et plus aucun appel à `gg(` hors de render(), où il est déclaré.
+  const iR = SRC.indexOf("function render(data){");
+  const finR = SRC.indexOf("\nfunction ", iR + 10);
+  const dehors = (SRC.slice(0, iR) + SRC.slice(finR)).match(/(^|[^\w.$])gg\(/g) || [];
+  V("aucun appel à gg( hors de render()", iR > 0 && dehors.length === 0, dehors.length + " appel(s) à un nom inexistant");
+}
+
 console.log("\n" + (ko ? `${ko} ECHEC(S)` : "TOUT PASSE") + `  (${ok} OK, ${ko} KO)\n`);
 process.exit(ko ? 1 : 0);

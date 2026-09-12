@@ -428,6 +428,24 @@ const HUB_URL = "https://insta-tracker-bot-production.up.railway.app/api/hub"; /
 const HUB_BASE = HUB_URL.replace(/\/api\/hub$/, "");
 const REFRESH_MS = 60000;
 
+// ⚠️ « ABSENT » N'EST PAS « ZÉRO » — ET UNE AIDE LOCALE N'EST PAS PARTAGÉE (13/09).
+// La lecture des métriques (`gg`) vivait DANS render(). La carte du jour (image
+// à partager), l'écran « Bonjour » et le briefing vocal l'appelaient AUSSI :
+// hors de render(), le nom n'existait pas, le ReferenceError était avalé par leur
+// try… et ils annonçaient « Profit du mois : 0 $ » en permanence. Et même dans
+// render(), `Number(x)||0` changeait une métrique manquante en « 0 $ » — la
+// jumelle Noctra l'avait corrigé, pas celle-ci. Une métrique absente rend null,
+// qui s'affiche « — ».
+function metrique(id, k, data){
+  const src = data || (typeof LAST !== "undefined" ? LAST : null) || {};
+  const d = src[id];
+  if(!d || !d.metrics) return null;
+  const v = d.metrics[k];
+  if(v == null || v === "") return null;
+  const n = Number(v);
+  return isFinite(n) ? n : null;
+}
+const tiret = (v, f) => v == null ? "—" : f(v);
 const fmtMoney = v => HIDE ? "••• $" : (Math.round(v)).toLocaleString("fr-FR") + " $";
 const fmtInt   = v => Math.round(v).toLocaleString("fr-FR");
 const fmtBig   = v => {
@@ -549,17 +567,20 @@ function render(data){
 
   const live = TOOLS.filter(t=>!t.build && inWorld(t));
   const onCount = live.filter(t=>(data[t.id]||{}).status==="online").length;
-  const gg = (id,k)=>{ const d=data[id]; return d&&d.metrics?Number(d.metrics[k])||0:0; };
+  const gg = (id,k)=>metrique(id, k, data);
   const stInW = inWorld(toolById("stats-tracker"));
   const tiles = [`<div class="tile hero"><div class="lbl">Outils en ligne</div><div class="val">${onCount}<small>/ ${live.length}</small></div></div>`];
   if(stInW){
-    tiles.push(`<div class="tile"><div class="lbl">À payer (quinzaine)</div><div class="val">${fmtMoney(gg("stats-tracker","aPayer"))}</div></div>`);
-    tiles.push(`<div class="tile"><div class="lbl">Subs équipe</div><div class="val">${fmtInt(gg("stats-tracker","subsQuinzaine"))}</div></div>`);
+    tiles.push(`<div class="tile"><div class="lbl">À payer (quinzaine)</div><div class="val">${tiret(gg("stats-tracker","aPayer"), fmtMoney)}</div></div>`);
+    tiles.push(`<div class="tile"><div class="lbl">Subs équipe</div><div class="val">${tiret(gg("stats-tracker","subsQuinzaine"), fmtInt)}</div></div>`);
   }
-  let profit = 0;
-  if(inWorld(toolById("shinra-finance"))) profit += gg("shinra-finance","profitMonth");
-  if(inWorld(toolById("noctra-finance"))) profit += gg("noctra-finance","profitMonth");
-  tiles.push(`<div class="tile"><div class="lbl">Profit du mois</div><div class="val">${fmtMoney(profit)}</div></div>`);
+  // Une source muette rend le total INCONNU : additionner ce qu'on a lu
+  // afficherait un profit amputé comme s'il était complet.
+  const pfs = [];
+  if(inWorld(toolById("shinra-finance"))) pfs.push(gg("shinra-finance","profitMonth"));
+  if(inWorld(toolById("noctra-finance"))) pfs.push(gg("noctra-finance","profitMonth"));
+  const profit = (pfs.length && pfs.every(v=>v!=null)) ? pfs.reduce((a,b)=>a+b,0) : null;
+  tiles.push(`<div class="tile"><div class="lbl">Profit du mois</div><div class="val">${tiret(profit, fmtMoney)}</div></div>`);
   $("#summary").innerHTML = tiles.join("");
 
   // alerte hors-ligne
@@ -1206,7 +1227,7 @@ async function doAsk(q){
 { const a=$("#ask"); if(a) a.addEventListener("click",e=>{ const q=e.target.closest("[data-q]"); if(q) doAsk(q.getAttribute("data-q")); }); }
 (function(){ const SR=window.SpeechRecognition||window.webkitSpeechRecognition; const mic=$("#askMic"); if(!mic) return; if(!SR){ mic.style.display="none"; return; } let rec=null,listening=false; mic.onclick=()=>{ if(listening){ try{rec.stop();}catch(e){} return; } rec=new SR(); rec.lang="fr-FR"; rec.interimResults=false; rec.maxAlternatives=1; rec.onstart=()=>{ listening=true; mic.classList.add("on"); mic.textContent="🔴"; }; rec.onend=()=>{ listening=false; mic.classList.remove("on"); mic.textContent="🎤"; }; rec.onresult=(e)=>{ const t=e.results[0][0].transcript; $("#askInput").value=t; doAsk(t); }; try{ rec.start(); }catch(e){ listening=false; } }; })();
 function roundRect(ctx,X,Y,W,H,R){ ctx.beginPath(); ctx.moveTo(X+R,Y); ctx.arcTo(X+W,Y,X+W,Y+H,R); ctx.arcTo(X+W,Y+H,X,Y+H,R); ctx.arcTo(X,Y+H,X,Y,R); ctx.arcTo(X,Y,X+W,Y,R); ctx.closePath(); }
-function ggSafe(id,k){ try{ return gg(id,k); }catch(e){ return 0; } }
+function ggSafe(id,k){ return metrique(id,k); }
 function makeDayCard(){
   const c=document.createElement("canvas"); c.width=1080; c.height=1350; const x=c.getContext("2d");
   const acc=(getComputedStyle(document.documentElement).getPropertyValue("--acc")||"#4ade80").trim();
@@ -1215,7 +1236,7 @@ function makeDayCard(){
   const g=x.createRadialGradient(540,-120,60,540,320,760); g.addColorStop(0,acc); g.addColorStop(1,"rgba(10,10,10,0)"); x.globalAlpha=.35; x.fillStyle=g; x.fillRect(0,0,1080,760); x.globalAlpha=1;
   x.fillStyle="#fff"; x.font="bold 66px Inter,Arial,sans-serif"; x.fillText(brand,80,148);
   x.fillStyle=acc; x.font="600 33px Inter,Arial,sans-serif"; const dt=new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"}); x.fillText("Résumé du "+dt,80,205);
-  const stats=[["Profit du mois",fmtMoney(ggSafe("shinra-finance","profitMonth"))],["Subs",fmtInt(ggSafe("shinra-finance","subs"))],["Drives 7j",fmtInt(ggSafe("clipfusion-shinra","drives7d"))],["Vues 7j",fmtBig(ggSafe("clipfusion-shinra","views7d"))]];
+  const stats=[["Profit du mois",tiret(ggSafe("shinra-finance","profitMonth"),fmtMoney)],["Subs",tiret(ggSafe("shinra-finance","subs"),fmtInt)],["Drives 7j",tiret(ggSafe("clipfusion-shinra","drives7d"),fmtInt)],["Vues 7j",tiret(ggSafe("clipfusion-shinra","views7d"),fmtBig)]];
   const sy=290;
   for(let i=0;i<stats.length;i++){ const col=i%2,row=(i/2)|0,bx=80+col*480,by=sy+row*225; x.fillStyle="#141416"; roundRect(x,bx,by,440,195,24); x.fill(); x.fillStyle="#8a8a92"; x.font="600 29px Inter,Arial,sans-serif"; x.fillText(stats[i][0],bx+34,by+56); x.fillStyle="#fff"; x.font="bold 58px Inter,Arial,sans-serif"; x.fillText(String(stats[i][1]),bx+34,by+146); }
   const undone=(typeof TASKS!=="undefined")?(["moi","other","general"].reduce((a,k)=>a+((TASKS[k]||[]).filter(t=>!t.done).length),0)):0;
@@ -1237,8 +1258,8 @@ function renderMorning(){
   const name=(typeof NAMES!=="undefined"&&NAMES[(typeof WHO!=="undefined")?WHO:"moi"])||"toi";
   const streak=computeStreak();
   const h=new Date().getHours(), hi=h<6?"Bonne nuit":h<12?"Bonjour":h<18?"Bon après-midi":"Bonsoir";
-  let profit=0; try{ profit=gg("shinra-finance","profitMonth"); }catch(e){}
-  const money=v=>(typeof HIDE!=="undefined"&&HIDE)?"•••":Math.round(Number(v)||0).toLocaleString("fr-FR")+" $";
+  const profit=metrique("shinra-finance","profitMonth");   // null = pas lu → « — », jamais « 0 $ »
+  const money=v=>(typeof HIDE!=="undefined"&&HIDE)?"•••":(v==null?"—":Math.round(Number(v)||0).toLocaleString("fr-FR")+" $");
   const tasks=[]; ["moi","general"].forEach(k=>{ ((typeof TASKS!=="undefined"&&TASKS[k])||[]).filter(t=>!t.done).forEach(t=>tasks.push(t)); }); const shown=tasks.slice(0,6);
   const na=LAST_NA;
   $("#morningBody").innerHTML=`
@@ -1248,7 +1269,7 @@ function renderMorning(){
     ${na?`<div class="mn-next">👉 ${na.icon||""} <b>${escapeHtml(na.text||"")}</b></div>`:""}
     <div class="mn-tasks"><h4>📋 Ta journée ${shown.length?`(${tasks.length})`:""}</h4>${shown.length?shown.map(t=>`<div class="mn-task">⬜ ${escapeHtml(t.text)}</div>`).join(""):`<div style="color:var(--muted);font-size:14px">Rien pour l'instant 🎉</div>`}</div>
     <button class="mn-go" id="mnGo">Commencer ma journée →</button>`;
-  const mv=$("#mnMoney"); if(mv && !(typeof HIDE!=="undefined"&&HIDE)) animateCount(mv, profit||0, v=>v.toLocaleString("fr-FR")+" $");
+  const mv=$("#mnMoney"); if(mv && profit!=null && !(typeof HIDE!=="undefined"&&HIDE)) animateCount(mv, profit, v=>v.toLocaleString("fr-FR")+" $");
   const cl=$("#mnClose"), go=$("#mnGo"); if(cl) cl.onclick=closeMorning; if(go) go.onclick=closeMorning;
   const sp=$("#mnSpeak"); if(sp) sp.onclick=speakBriefing;
 }
@@ -1256,10 +1277,10 @@ function speakBriefing(){
   try{ if(!window.speechSynthesis) return;
     const name=(typeof NAMES!=="undefined"&&NAMES[(typeof WHO!=="undefined")?WHO:"moi"])||"toi";
     const h=new Date().getHours(), hi=h<12?"Bonjour":h<18?"Bon après-midi":"Bonsoir";
-    let profit=0; try{ profit=gg("shinra-finance","profitMonth"); }catch(e){}
+    const profit=metrique("shinra-finance","profitMonth");
     const undone=(typeof TASKS!=="undefined")?["moi","other","general"].reduce((a,k)=>a+((TASKS[k]||[]).filter(t=>!t.done).length),0):0;
     let p=[hi+" "+name+"."];
-    if(profit && !(typeof HIDE!=="undefined"&&HIDE)) p.push("Profit du mois : "+Math.round(profit)+" dollars.");
+    if(profit!=null && !(typeof HIDE!=="undefined"&&HIDE)) p.push("Profit du mois : "+Math.round(profit)+" dollars.");
     p.push(undone?(undone+" tâche"+(undone>1?"s":"")+" à faire."):"Aucune tâche en attente.");
     const text=p.join(" ");
     // Essaie la belle voix serveur (Gemini) ; sinon retombe sur la voix du téléphone.
