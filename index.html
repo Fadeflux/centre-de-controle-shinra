@@ -718,16 +718,53 @@ $("#hide").onclick = ()=>{
   render(LAST); renderCosts();
 };
 
+/* ---------- enregistrements : lire la réponse du serveur ---------- */
+// ⚠️ (12/09) Les enregistrements partaient avec `.catch(()=>{})` : un refus du
+// serveur passait pour un succès. On le DIT (une fois par minute par sujet),
+// dans un bandeau discret — cette page n'a pas de « toast ».
+function avertir(titre, detail){
+  try{
+    let b=document.getElementById("avertEnvoi");
+    if(!b){ b=document.createElement("div"); b.id="avertEnvoi";
+      b.style.cssText="position:fixed;left:50%;bottom:18px;transform:translateX(-50%);max-width:92vw;z-index:9999;background:#3a1d1d;color:#ffd9d9;border:1px solid #7a3b3b;border-radius:10px;padding:10px 14px;font:13px/1.35 system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.35)";
+      document.body.appendChild(b); }
+    b.textContent=titre+" — "+detail; b.hidden=false;
+    clearTimeout(avertir._t); avertir._t=setTimeout(()=>{ b.hidden=true; }, 7000);
+  }catch(e){}
+}
+function envoiServeur(chemin, corps, libelle){
+  const dejaDit = envoiServeur._dit || (envoiServeur._dit = {});
+  return fetch(HUB_BASE+chemin,{method:"POST",headers:{"content-type":"application/json","x-hub-token":TOKEN},body:JSON.stringify(corps)})
+    .then(r=>{ if(!r || !r.ok) throw new Error("HTTP "+(r?r.status:"?")); return true; })
+    .catch(e=>{
+      const maintenant=Date.now();
+      if(!dejaDit[libelle] || maintenant-dejaDit[libelle]>60000){
+        dejaDit[libelle]=maintenant;
+        avertir("⚠️ "+libelle+" : NON enregistré sur le serveur","gardé sur cet appareil seulement ("+((e&&e.message)||"réseau")+"). Réessaie plus tard.");
+      }
+      return false;
+    });
+}
+
 /* ---------- ma journée (à faire) ---------- */
 let TODOS = JSON.parse(localStorage.getItem("ccs_todos") || "[]");
 let todoSyncT = null;
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+// ⚠️ DÉRIVE DE FORK (12/09). La liste part ENTIÈRE au serveur, qui la remplace
+// telle quelle. Le jumeau Noctra a fermé ce trou avec un verrou de lecture —
+// « cocher une case avant la fin de loadTodosFromBrain effaçait toutes les
+// tâches saisies sur un autre appareil » — et ce jumeau-ci était resté ouvert :
+// sur un téléphone neuf, ou après un 502 au chargement, la première case cochée
+// remplaçait la liste du serveur par la liste locale (vide, ou vieille).
+// Tant que la lecture n'a pas réussi, on garde les saisies (TODOS_DIRTY) et on
+// les fusionne au chargement.
+let TODOS_LOADED=false, TODOS_DIRTY=false;
 function saveTodos(){
   localStorage.setItem("ccs_todos", JSON.stringify(TODOS));
-  if(TOKEN && HUB_URL){
-    clearTimeout(todoSyncT);
-    todoSyncT = setTimeout(()=>{ fetch(HUB_BASE+"/api/hub/notes",{method:"POST",headers:{"content-type":"application/json","x-hub-token":TOKEN},body:JSON.stringify({notes:TODOS})}).catch(()=>{}); }, 600);
-  }
+  if(!(TOKEN && HUB_URL)) return;
+  if(!TODOS_LOADED){ TODOS_DIRTY=true; return; }
+  clearTimeout(todoSyncT);
+  todoSyncT = setTimeout(()=>{ envoiServeur("/api/hub/notes",{notes:TODOS},"Liste de choses à faire"); }, 600);
 }
 function renderTodos(){
   const done = TODOS.filter(t=>t.d).length;
@@ -743,15 +780,30 @@ $("#todoInput").addEventListener("keydown",e=>{ if(e.key==="Enter"){ addTodo(e.t
 $("#todoList").addEventListener("click",e=>{
   const tg=e.target.closest("[data-toggle]"), dl=e.target.closest("[data-del]");
   if(tg){ const i=+tg.getAttribute("data-toggle"); if(TODOS[i]){ TODOS[i].d=!TODOS[i].d; saveTodos(); renderTodos(); } }
-  else if(dl){ const i=+dl.getAttribute("data-del"); TODOS.splice(i,1); saveTodos(); renderTodos(); }
+  else if(dl){
+    // La croix est collée à la case à cocher, et la suppression part aussi du
+    // serveur à la seconde suivante, sans retour possible : on nomme ce qu'on efface.
+    const i=+dl.getAttribute("data-del");
+    const t=TODOS[i]; if(!t) return;
+    if(!confirm("Supprimer \u00ab "+String(t.t).slice(0,80)+" \u00bb ?\n\nC'est d\u00e9finitif, sur tous tes appareils.")) return;
+    TODOS.splice(i,1); saveTodos(); renderTodos();
+  }
 });
 async function loadTodosFromBrain(){
-  if(!TOKEN || !HUB_URL) return;
+  if(!TOKEN || !HUB_URL){ TODOS_LOADED=true; return; }
   try{
     const r = await fetch(HUB_BASE+"/api/hub/notes",{headers:{"x-hub-token":TOKEN},cache:"no-store"});
     if(!r.ok) return;
     const j = await r.json();
-    if(Array.isArray(j.notes)){ TODOS = j.notes; localStorage.setItem("ccs_todos",JSON.stringify(TODOS)); renderTodos(); }
+    if(Array.isArray(j.notes)){
+      const srv=j.notes;
+      // Reprise : les tâches ajoutées pendant que le serveur ne répondait pas.
+      if(TODOS_DIRTY){ const vus=new Set(srv.map(x=>x&&x.t)); TODOS.forEach(x=>{ if(x&&!vus.has(x.t)) srv.unshift(x); }); }
+      TODOS = srv; localStorage.setItem("ccs_todos",JSON.stringify(TODOS));
+      TODOS_LOADED=true;
+      if(TODOS_DIRTY){ TODOS_DIRTY=false; saveTodos(); }
+      renderTodos();
+    }
   }catch(e){}
 }
 renderTodos();
@@ -1024,9 +1076,13 @@ function tkId(){ return Date.now().toString(36)+Math.random().toString(36).slice
 let TK_AC=null;
 function tkPop(){ try{ if(!TK_AC) TK_AC=new (window.AudioContext||window.webkitAudioContext)(); const c=TK_AC,o=c.createOscillator(),g=c.createGain(); o.type="sine"; o.frequency.setValueAtTime(880,c.currentTime); o.frequency.exponentialRampToValueAtTime(1320,c.currentTime+0.07); g.gain.setValueAtTime(0.07,c.currentTime); g.gain.exponentialRampToValueAtTime(0.0001,c.currentTime+0.16); o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime+0.18); }catch(e){} }
 let TK_LAST_EDIT = 0;
+// Même verrou que le jumeau Noctra : pas d'envoi tant qu'aucune lecture n'a
+// réussi (la synchro toutes les 8 s fusionne et lève le verrou).
+let TASKS_LOADED=false;
 function saveTasks(){
   tkNorm(); TK_LAST_EDIT=Date.now(); localStorage.setItem("ccs_tasks",JSON.stringify(TASKS));
-  if(TOKEN){ clearTimeout(TK_SAVE_T); TK_SAVE_T=setTimeout(()=>{ fetch(HUB_BASE+"/api/hub/tasks",{method:"POST",headers:{"content-type":"application/json","x-hub-token":TOKEN},body:JSON.stringify({tasks:TASKS})}).catch(()=>{}); },500); }
+  if(TOKEN && !TASKS_LOADED) return;
+  if(TOKEN){ clearTimeout(TK_SAVE_T); TK_SAVE_T=setTimeout(()=>{ envoiServeur("/api/hub/tasks",{tasks:TASKS},"Tableau des tâches"); },500); }
 }
 function tkSig(x){ return [x.id,x.text,(x.tags||[]).join(","),x.done?1:0,x.prio||"n",x.repeat||"",x.doneTs||0,x.del?1:0,x.upd||0].join("|"); }
 function tkBoardSig(b){ return TK_KEYS.map(k=>(b[k]||[]).map(tkSig).join(";")).join("§"); }
@@ -1041,7 +1097,8 @@ function tkMerge(local, server){
   return {board:out, localWins};
 }
 async function loadTasks(){
-  if(TOKEN){ try{ const r=await fetch(HUB_BASE+"/api/hub/tasks",{headers:{"x-hub-token":TOKEN}}); if(r.ok){ const j=await r.json(); if(j.tasks){ const m=tkMerge(TASKS,j.tasks); TASKS=m.board; tkNorm(); localStorage.setItem("ccs_tasks",JSON.stringify(TASKS)); if(m.localWins) saveTasks(); } } }catch(e){} }
+  if(TOKEN){ try{ const r=await fetch(HUB_BASE+"/api/hub/tasks",{headers:{"x-hub-token":TOKEN}}); if(r.ok){ const j=await r.json(); if(j.tasks){ const m=tkMerge(TASKS,j.tasks); TASKS=m.board; tkNorm(); localStorage.setItem("ccs_tasks",JSON.stringify(TASKS)); TASKS_LOADED=true; if(m.localWins) saveTasks(); } } }catch(e){} }
+  else TASKS_LOADED=true;
   renderTasks();
 }
 async function syncTasks(){
@@ -1049,9 +1106,10 @@ async function syncTasks(){
   try{
     const r=await fetch(HUB_BASE+"/api/hub/tasks",{headers:{"x-hub-token":TOKEN}}); if(!r.ok) return;
     const j=await r.json(); if(!j.tasks) return;
+    TASKS_LOADED=true;                // une lecture réussie lève le verrou d'écriture
     const m=tkMerge(TASKS,j.tasks);
     if(tkBoardSig(m.board)!==tkBoardSig(TASKS)){ TASKS=m.board; tkNorm(); localStorage.setItem("ccs_tasks",JSON.stringify(TASKS)); renderTasks(); }
-    if(m.localWins && Date.now()-TK_LAST_EDIT>1500){ fetch(HUB_BASE+"/api/hub/tasks",{method:"POST",headers:{"content-type":"application/json","x-hub-token":TOKEN},body:JSON.stringify({tasks:TASKS})}).catch(()=>{}); }
+    if(m.localWins && Date.now()-TK_LAST_EDIT>1500){ envoiServeur("/api/hub/tasks",{tasks:TASKS},"Tableau des tâches"); }
   }catch(e){}
 }
 setInterval(syncTasks, 8000);
@@ -1284,7 +1342,9 @@ loadTodosFromBrain();
 loadJournal();
 loadTasks();
 loadSms();
-setInterval(()=>{ if(!$("#gate").classList.contains("show")){ load(); loadJournal(); } }, REFRESH_MS);
+setInterval(()=>{ if(!$("#gate").classList.contains("show")){ load(); loadJournal();
+  // Sans ce réessai, un seul échec au chargement retenait les saisies toute la session.
+  if(TOKEN && !TODOS_LOADED) loadTodosFromBrain(); } }, REFRESH_MS);
 </script>
 </body>
 </html>

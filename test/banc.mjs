@@ -20,7 +20,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ICI = path.dirname(fileURLToPath(import.meta.url));
-const PAGE = path.join(ICI, "..", "index.html");
+// Un chemin en argument = rejouer le banc sur une AUTRE version de la page
+// (celle d'avant un correctif) : il doit y échouer.
+const PAGE = process.argv[2] || path.join(ICI, "..", "index.html");
 const SRC = fs.readFileSync(PAGE, "utf8");
 
 let ok = 0, ko = 0;
@@ -157,6 +159,67 @@ V("une page sans déconnexion serait attrapée",
 V("un prénom réel réintroduit serait attrapé",
   /\b(Ghoulz|Manon)\b/i.test('const NAMES = { moi:"Andre", other:"Ghoulz" };'),
   "le contrôle ne reconnaît plus un prénom");
+
+console.log("\n== 5. la liste « à faire » ne s'efface plus avant d'avoir été lue ==");
+// ⚠️ DÉRIVE DE FORK (12/09) : la liste part ENTIÈRE au serveur, qui la remplace.
+// Le jumeau Noctra retenait l'envoi tant que la lecture n'avait pas réussi ;
+// celui-ci non — cocher une case sur un téléphone neuf (ou après un 502)
+// remplaçait la liste du serveur par la liste locale.
+{
+  // L'aide d'envoi précède le bloc depuis le correctif ; la page d'avant ne l'a pas.
+  const bloc = morceau("/* ---------- enregistrements : lire la réponse du serveur ---------- */", "/* ---------- rappels récurrents")
+            || morceau("/* ---------- ma journée (à faire) ---------- */", "/* ---------- rappels récurrents");
+  V("le bloc « à faire » est bien là", !!bloc);
+  if (bloc) {
+    const monter = (reponseGet) => {
+      const posts = [];
+      const el = () => ({ textContent: "", innerHTML: "", addEventListener() {}, hidden: true, style: {} });
+      const elements = {};
+      const $ = (sel) => (elements[sel] ||= el());
+      const fetch = (url, o) => {
+        if (o && o.method === "POST") { posts.push(JSON.parse(o.body)); return Promise.resolve({ ok: true, status: 200 }); }
+        return Promise.resolve(reponseGet());
+      };
+      const monde = fauxMonde({ ccs_todos: JSON.stringify([{ t: "locale", d: false }]) });
+      const doc = { getElementById: () => null, createElement: () => el(), body: { appendChild() {} } };
+      const f = new Function("$", "fetch", "localStorage", "document", "confirm", "TOKEN", "HUB_URL", "HUB_BASE",
+        bloc + "\n; return { saveTodos, loadTodosFromBrain, get TODOS(){ return TODOS; }, set TODOS(v){ TODOS=v; } };");
+      const m = f($, fetch, monde.localStorage, doc, () => true, "jeton", "http://x/api/hub", "http://x");
+      return { m, posts };
+    };
+    const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    // Lecture en échec (502) : cocher ne doit RIEN envoyer.
+    {
+      const { m, posts } = monter(() => ({ ok: false, status: 502, json: async () => ({}) }));
+      await m.loadTodosFromBrain();
+      m.TODOS[0].d = true; m.saveTodos();
+      await attendre(700);
+      V("après un 502 au chargement, cocher une case n'envoie pas la liste locale", posts.length === 0,
+        posts.length + " envoi(s) : la liste du serveur aurait été remplacée");
+    }
+    // La lecture finit par réussir : les saisies faites entre-temps sont fusionnées.
+    {
+      const { m, posts } = monter(() => ({ ok: true, status: 200, json: async () => ({ notes: [{ t: "serveur", d: false }] }) }));
+      m.TODOS.unshift({ t: "ajoutée hors ligne", d: false }); m.saveTodos();
+      await m.loadTodosFromBrain();
+      await attendre(700);
+      const textes = m.TODOS.map((x) => x.t);
+      V("la lecture réussie garde la tâche du serveur ET celle ajoutée entre-temps",
+        textes.includes("serveur") && textes.includes("ajoutée hors ligne"), JSON.stringify(textes));
+      V("... et ne pousse qu'UNE liste, la fusionnée", posts.length === 1 && posts[0].notes.length === textes.length,
+        JSON.stringify(posts));
+    }
+  }
+
+  // Plus aucun enregistrement dont la réponse du serveur est jetée.
+  const JETE = /fetch\(HUB_BASE\+"\/api\/[^"]+"\s*,\s*\{[^}]*method:"(POST|PUT|DELETE)"[\s\S]*?\)\.catch\(\(\)=>\{\}\)/;
+  const jetes = [];
+  SRC.split("\n").forEach((l, n) => { if (JETE.test(l) && !/\.ok\b/.test(l)) jetes.push("l." + (n + 1)); });
+  V("aucun enregistrement dont la réponse du serveur est jetée", jetes.length === 0, jetes.join(", "));
+  V("... et ce contrôle reconnaît la forme d'avant",
+    JETE.test('fetch(HUB_BASE+"/api/hub/notes",{method:"POST",headers:{},body:JSON.stringify({notes:TODOS})}).catch(()=>{});'));
+}
 
 console.log("\n" + (ko ? `${ko} ECHEC(S)` : "TOUT PASSE") + `  (${ok} OK, ${ko} KO)\n`);
 process.exit(ko ? 1 : 0);
