@@ -308,7 +308,7 @@
     <div class="logo"><svg viewBox="0 0 100 100" fill="none"><rect x="20" y="20" width="26" height="26" rx="6" fill="#fff"/><rect x="54" y="20" width="26" height="26" rx="6" fill="#fff" opacity=".5"/><rect x="20" y="54" width="26" height="26" rx="6" fill="#fff" opacity=".5"/><rect x="54" y="54" width="26" height="26" rx="6" fill="#fff"/></svg></div>
     <h2>Centre de contrôle</h2>
     <p>Connecte-toi pour voir tes chiffres.</p>
-    <input id="pwUser" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Identifiant (andre / ghoulz)" />
+    <input id="pwUser" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Identifiant" />
     <input id="pw" type="password" inputmode="text" autocomplete="current-password" placeholder="Mot de passe" />
     <button id="pwGo">Entrer</button>
     <div class="err" id="pwErr"></div>
@@ -940,9 +940,16 @@ $("#push").onclick=enablePush;
 
 /* ---------- démarrage ---------- */
 /* ---------- tâches d'équipe (3 listes + tags, sync serveur) ---------- */
+// ⚠️ Dépôt PUBLIC. Cette ligne et les deux exemples cliquables du panneau
+// « demande » portent encore un nom : ils sont FONCTIONNELS (le rapprochement
+// du login, et une tâche réellement créée pour cette personne). Les
+// identifiants de connexion, eux, ont été retirés de la page le 12/09 —
+// les publier revenait à donner la moitié de la clef.
 const NAMES = { moi:"Andre", other:"Ghoulz" };   // Shinra ; côté Noctra = { moi:"Andre", other:"Manon" }
 const AVATARS = { moi:"🧑‍💻", other:"🧑‍🚀" };
-// Identité = login : "andre" -> moi, "ghoulz" -> other (dérivé du nom d'utilisateur si le serveur ne le donne pas)
+// Identité = login : le nom d'utilisateur est rapproché de NAMES ci-dessus
+// (dérivé du nom d'utilisateur si le serveur ne le donne pas). Les identifiants
+// eux-mêmes ne sont PAS écrits ici : ce dépôt est PUBLIC.
 function whoFromUser(u){ const ul=String(u||"").toLowerCase().trim(); for(const k in NAMES){ if((NAMES[k]||"").toLowerCase()===ul) return k; } return null; }
 function fillMe(){ try{ const w=(typeof WHO!=="undefined")?WHO:"moi"; const el=document.getElementById("taskMeName"); if(el) el.textContent=NAMES[w]||"—"; const av=document.getElementById("taskMeAv"); if(av) av.textContent=AVATARS[w]||"🙂"; }catch(e){} }
 const TK_KEYS = ["moi","other","general"];
