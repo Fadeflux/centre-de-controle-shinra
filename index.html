@@ -1070,7 +1070,38 @@ let TK_SAVE_T = null;
 function tkTabLabel(k){ if(k==="general") return "🌐 Générale"; return (k===WHO?"📋 ":"👤 ")+NAMES[k]; }
 function tkName(k){ if(k==="general") return "Générale"; return NAMES[k]+(k===WHO?" (moi)":""); }
 const REPEAT_MS={day:864e5,week:6048e5,quinzaine:1296e6}, REPEAT_LBL={day:"chaque jour",week:"chaque semaine",quinzaine:"chaque quinzaine"};
-function tkReconcile(){ let ch=false; const now=Date.now(); TK_KEYS.forEach(k=>{ (TASKS[k]||[]).forEach(x=>{ if(x.repeat && !x.del && x.done && x.doneTs && (now-x.doneTs>=(REPEAT_MS[x.repeat]||864e5))){ x.done=false; x.doneTs=0; x.ts=now; x.upd=now; ch=true; } }); }); return ch; }
+// ⚠️ UNE TÂCHE « CHAQUE JOUR » NE SE ROUVRAIT PAS AU CHANGEMENT DE JOUR, MAIS
+// 24 H APRÈS LE CLIC (correctif du jumeau Noctra, resté ouvert ici jusqu'au 12/09).
+// Cochée lundi à 23 h, elle restait « ✓ faite » mardi jusqu'à 23 h — alors qu'on
+// est mardi et qu'elle n'a pas été faite. On compare donc des DATES : le jour pour
+// « chaque jour », la semaine ISO pour « chaque semaine », la quinzaine pour
+// « chaque quinzaine ». `doneJour` est posé à la coche ; pour les tâches cochées
+// avant ce correctif, on le reconstitue depuis `doneTs` — personne ne perd son état.
+function tkPeriodeDe(ts, repeat){
+  const d=new Date(ts||0);
+  const iso=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  if(repeat==="week"){
+    const t=new Date(Date.UTC(Number(iso.slice(0,4)),Number(iso.slice(5,7))-1,Number(iso.slice(8,10))));
+    const j=t.getUTCDay()||7; t.setUTCDate(t.getUTCDate()+4-j);
+    const an=new Date(Date.UTC(t.getUTCFullYear(),0,1));
+    return t.getUTCFullYear()+"-S"+Math.ceil(((t-an)/864e5+1)/7);
+  }
+  if(repeat==="quinzaine"){
+    return iso.slice(0,7)+(Number(iso.slice(8,10))<=15?"-Q1":"-Q2");
+  }
+  return iso;
+}
+function tkReconcile(){
+  let ch=false; const now=Date.now();
+  TK_KEYS.forEach(k=>{ (TASKS[k]||[]).forEach(x=>{
+    if(!x.repeat || x.del || !x.done || !x.doneTs) return;
+    const faitLe=x.doneJour || tkPeriodeDe(x.doneTs, x.repeat);
+    if(faitLe !== tkPeriodeDe(now, x.repeat)){
+      x.done=false; x.doneTs=0; x.doneJour=""; x.ts=now; x.upd=now; ch=true;
+    }
+  }); });
+  return ch;
+}
 function tkNorm(){ ["moi","other","general"].forEach(k=>{ if(!Array.isArray(TASKS[k])) TASKS[k]=[]; }); }
 function tkId(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 let TK_AC=null;
@@ -1103,6 +1134,9 @@ async function loadTasks(){
 }
 async function syncTasks(){
   if(!TOKEN) return;
+  // Onglet en arrière-plan : inutile de sonder. Sans ce garde, un onglet oublié
+  // lisait la base toutes les 8 s, ~450 fois par heure (correctif du jumeau, 12/09).
+  try{ if(document.visibilityState === "hidden") return; }catch(e){}
   try{
     const r=await fetch(HUB_BASE+"/api/hub/tasks",{headers:{"x-hub-token":TOKEN}}); if(!r.ok) return;
     const j=await r.json(); if(!j.tasks) return;
@@ -1143,7 +1177,7 @@ function renderTasks(){
 { const tabs=$("#taskTabs"); if(tabs) tabs.addEventListener("click",e=>{ const b=e.target.closest("[data-tkview]"); if(b){ TK_VIEW=b.getAttribute("data-tkview"); localStorage.setItem("ccs_tkview",TK_VIEW); const d=$("#taskDest"); if(d) d.value=TK_VIEW; renderTasks(); } }); }
 { const list=$("#taskList"); if(list){
   list.addEventListener("click",e=>{
-    const ck=e.target.closest("[data-tkdone]"); if(ck){ const it=TASKS[TK_VIEW].find(x=>x.id===ck.getAttribute("data-tkdone")); if(it){ it.done=!it.done; if(it.done){ if(it.repeat) it.doneTs=Date.now(); tkPop(); } else it.doneTs=0; it.upd=Date.now(); saveTasks(); renderTasks(); } return; }
+    const ck=e.target.closest("[data-tkdone]"); if(ck){ const it=TASKS[TK_VIEW].find(x=>x.id===ck.getAttribute("data-tkdone")); if(it){ it.done=!it.done; if(it.done){ if(it.repeat){ it.doneTs=Date.now(); it.doneJour=tkPeriodeDe(it.doneTs, it.repeat); } tkPop(); } else { it.doneTs=0; it.doneJour=""; } it.upd=Date.now(); saveTasks(); renderTasks(); } return; }
     const dl=e.target.closest("[data-tkdel]"); if(dl){ const id=dl.getAttribute("data-tkdel"); const it=TASKS[TK_VIEW].find(x=>x.id===id); if(it){ it.del=true; it.upd=Date.now(); saveTasks(); renderTasks(); } return; }
   });
   list.addEventListener("change",e=>{

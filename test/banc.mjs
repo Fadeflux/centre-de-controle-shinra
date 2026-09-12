@@ -221,5 +221,44 @@ console.log("\n== 5. la liste « à faire » ne s'efface plus avant d'avoir ét�
     JETE.test('fetch(HUB_BASE+"/api/hub/notes",{method:"POST",headers:{},body:JSON.stringify({notes:TODOS})}).catch(()=>{});'));
 }
 
+console.log("\n== 6. tâches récurrentes : on change de JOUR, pas de 24 h ==");
+// ⚠️ (12/09) Correctif du jumeau Noctra resté ouvert ici : une tâche « chaque
+// jour » cochée à 23 h restait « faite » jusqu'à 23 h le LENDEMAIN.
+{
+  // Jusqu'à la fonction suivante : tkReconcile tenait sur une ligne avant le correctif, plusieurs après.
+  const fReconcile = morceau("function tkReconcile(){", "\nfunction tkNorm(){");
+  const fPeriode = morceau("function tkPeriodeDe(ts, repeat){", "\nfunction tkReconcile(){");
+  V("le rapprochement des tâches est là", !!fReconcile);
+  if (fReconcile) {
+    const maintenant = new Date(); maintenant.setHours(8, 0, 0, 0);            // aujourd'hui 08 h
+    const hier23h = new Date(maintenant); hier23h.setDate(hier23h.getDate() - 1); hier23h.setHours(23, 0, 0, 0);
+    const TASKS = { moi: [{ id: "t1", text: "Payer les VA", repeat: "day", done: true, doneTs: hier23h.getTime() }], other: [], general: [] };
+    const vraiNow = Date.now;
+    Date.now = () => maintenant.getTime();
+    try {
+      const f = new Function("TASKS", "TK_KEYS", "REPEAT_MS",
+        (fPeriode || "") + "\n" + fReconcile + "\n; return tkReconcile;")(TASKS, ["moi", "other", "general"], { day: 864e5, week: 6048e5, quinzaine: 1296e6 });
+      f();
+    } finally { Date.now = vraiNow; }
+    V("une tâche « chaque jour » cochée hier à 23 h est rouverte ce matin",
+      TASKS.moi[0].done === false, "toujours « faite » : 9 h seulement se sont écoulées");
+  }
+}
+
+console.log("\n== 7. la synchro du tableau se tait quand l'onglet est caché ==");
+{
+  const bloc = morceau("async function syncTasks(){", "\nsetInterval(syncTasks");
+  V("la synchro est là", !!bloc);
+  if (bloc) {
+    let appels = 0;
+    const f = new Function("TOKEN", "HUB_BASE", "fetch", "document", "tkMerge", "tkBoardSig", "tkNorm", "renderTasks", "localStorage", "envoiServeur", "TASKS_LOADED", "TK_LAST_EDIT", "TASKS",
+      bloc + "\n; return syncTasks;")("jeton", "http://x", async () => { appels++; return { ok: false, status: 503 }; },
+        { visibilityState: "hidden" }, () => ({}), () => "", () => {}, () => {}, { setItem() {} }, () => {}, true, 0, {});
+    await f();
+    V("onglet en arrière-plan : aucune lecture de la base", appels === 0,
+      appels + " lecture(s) — toutes les 8 s, ~450 par heure par onglet oublié");
+  }
+}
+
 console.log("\n" + (ko ? `${ko} ECHEC(S)` : "TOUT PASSE") + `  (${ok} OK, ${ko} KO)\n`);
 process.exit(ko ? 1 : 0);
