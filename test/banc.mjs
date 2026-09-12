@@ -300,5 +300,40 @@ console.log("\n== 8. carte du jour, écran « Bonjour » et voix lisent VRAIMENT
   V("aucun appel à gg( hors de render()", iR > 0 && dehors.length === 0, dehors.length + " appel(s) à un nom inexistant");
 }
 
+console.log("\n== 9. la page entière se compile, et aucune garde typeof ne protège un nom inexistant ==");
+{
+  // ⚠️ (13/09) Les sections ci-dessus extraient des MORCEAUX : une erreur de
+  // syntaxe ailleurs dans la page les laisse vertes, alors que le navigateur
+  // refuse le script entier. Et une garde `typeof X==="function"` sur un nom qui
+  // n'existe nulle part évite l'erreur… en cachant que la fonctionnalité ne
+  // tourne jamais (vu sur la jumelle Noctra : `tkRender`, `gsGo`).
+  const { Script } = await import("node:vm");
+  const reScript = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+  let ms, n = 0; const erreurs = [];
+  while ((ms = reScript.exec(SRC))) {
+    if (/\bsrc\s*=/.test(ms[1])) continue;
+    n++;
+    try { new Script(ms[2]); } catch (e) { erreurs.push(e.message); }
+  }
+  V("chaque script de la page se compile", n > 0 && erreurs.length === 0, n + " script(s) ; " + erreurs.join(" | "));
+
+  const NAVIGATEUR = new Set(["window", "document", "navigator", "Notification", "speechSynthesis", "SpeechRecognition",
+    "webkitSpeechRecognition", "structuredClone", "requestIdleCallback", "IntersectionObserver", "ResizeObserver",
+    "BroadcastChannel", "AbortController", "fetch", "queueMicrotask", "crypto", "caches", "PushManager", "ClipboardItem",
+    "MediaRecorder", "AudioContext", "webkitAudioContext", "EventSource", "WebSocket", "matchMedia", "requestAnimationFrame"]);
+  const morts = [];
+  const re = /typeof\s+([A-Za-z_$][\w$]*)\s*===?\s*["']function["']/g;
+  let m;
+  while ((m = re.exec(SRC))) {
+    const nom = m[1];
+    if (NAVIGATEUR.has(nom)) continue;
+    const e = nom.replace(/\$/g, "\\$");
+    const defini = new RegExp("function\\s+" + e + "\\s*\\(|(?:const|let|var)\\s+" + e + "\\b|(?:const|let|var)\\s+[^;\\n]*[,{]\\s*" + e +
+      "\\b|window\\." + e + "\\s*=|[(,]\\s*" + e + "\\s*[,)=]|\\b" + e + "\\s*=>").test(SRC);
+    if (!defini) morts.push(nom);
+  }
+  V("aucune garde typeof vers une fonction qui n'existe nulle part", morts.length === 0, "gardes mortes : " + morts.join(", "));
+}
+
 console.log("\n" + (ko ? `${ko} ECHEC(S)` : "TOUT PASSE") + `  (${ok} OK, ${ko} KO)\n`);
 process.exit(ko ? 1 : 0);
