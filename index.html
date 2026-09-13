@@ -433,9 +433,8 @@ const REFRESH_MS = 60000;
 // à partager), l'écran « Bonjour » et le briefing vocal l'appelaient AUSSI :
 // hors de render(), le nom n'existait pas, le ReferenceError était avalé par leur
 // try… et ils annonçaient « Profit du mois : 0 $ » en permanence. Et même dans
-// render(), `Number(x)||0` changeait une métrique manquante en « 0 $ » — la
-// jumelle Noctra l'avait corrigé, pas celle-ci. Une métrique absente rend null,
-// qui s'affiche « — ».
+// render(), `Number(x)||0` changeait une métrique manquante en « 0 $ ». Une
+// métrique absente rend null, qui s'affiche « — ».
 function metrique(id, k, data){
   const src = data || (typeof LAST !== "undefined" ? LAST : null) || {};
   const d = src[id];
@@ -481,7 +480,7 @@ let LAST  = DEMO;
 let WORLD = "all";
 let HIDE  = localStorage.getItem("ccs_hide") === "1";
 let IS_LIVE = false;
-const ACCENTS = { all:["#4ade80","#3dc970"], shinra:["#4ade80","#3dc970"], noctra:["#4ade80","#3dc970"] };
+const ACCENTS = { all:["#4ade80","#3dc970"], shinra:["#4ade80","#3dc970"] };
 function applyAccent(){
   const a = ACCENTS[WORLD] || ACCENTS.all;
   document.documentElement.style.setProperty("--acc", a[0]);
@@ -576,9 +575,10 @@ function render(data){
   }
   // Une source muette rend le total INCONNU : additionner ce qu'on a lu
   // afficherait un profit amputé comme s'il était complet.
+  // ⚠️ (13/09) Seules les finances de CETTE page : un site absent de TOOLS n'a
+  // jamais de chiffre, et rendait le total inconnu en permanence (« — »).
   const pfs = [];
   if(inWorld(toolById("shinra-finance"))) pfs.push(gg("shinra-finance","profitMonth"));
-  if(inWorld(toolById("noctra-finance"))) pfs.push(gg("noctra-finance","profitMonth"));
   const profit = (pfs.length && pfs.every(v=>v!=null)) ? pfs.reduce((a,b)=>a+b,0) : null;
   tiles.push(`<div class="tile"><div class="lbl">Profit du mois</div><div class="val">${tiret(profit, fmtMoney)}</div></div>`);
   $("#summary").innerHTML = tiles.join("");
@@ -771,12 +771,10 @@ function envoiServeur(chemin, corps, libelle){
 let TODOS = JSON.parse(localStorage.getItem("ccs_todos") || "[]");
 let todoSyncT = null;
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
-// ⚠️ DÉRIVE DE FORK (12/09). La liste part ENTIÈRE au serveur, qui la remplace
-// telle quelle. Le jumeau Noctra a fermé ce trou avec un verrou de lecture —
-// « cocher une case avant la fin de loadTodosFromBrain effaçait toutes les
-// tâches saisies sur un autre appareil » — et ce jumeau-ci était resté ouvert :
-// sur un téléphone neuf, ou après un 502 au chargement, la première case cochée
-// remplaçait la liste du serveur par la liste locale (vide, ou vieille).
+// ⚠️ (12/09) La liste part ENTIÈRE au serveur, qui la remplace telle quelle.
+// Sur un téléphone neuf, ou après un 502 au chargement, la première case cochée
+// remplaçait la liste du serveur par la liste locale (vide, ou vieille) — et
+// effaçait les tâches saisies sur un autre appareil.
 // Tant que la lecture n'a pas réussi, on garde les saisies (TODOS_DIRTY) et on
 // les fusionne au chargement.
 let TODOS_LOADED=false, TODOS_DIRTY=false;
@@ -1050,8 +1048,7 @@ try{ appliquerNoms(JSON.parse(localStorage.getItem("ccs_noms")||"null")); }catch
 /* ---------- 🚪 SE DÉCONNECTER ----------
    ⚠️ IL N'Y AVAIT AUCUNE DÉCONNEXION DANS CETTE PAGE. `ccs_token` était écrit au
    premier login et JAMAIS effacé : pas un seul `removeItem` dans tout le
-   fichier. Le défaut avait été trouvé et corrigé côté Noctra ; ce jumeau-ci
-   était resté ouvert. C'est de la dérive de fork sur une fonction de sécurité.
+   fichier — sur une fonction de sécurité.
    Conséquence : prêter ce téléphone trente secondes, c'est donner l'accès. Le
    perdre, c'est pareil. Et si le jeton fuite, rien ne permet de le retirer de
    l'appareil.
@@ -1092,7 +1089,7 @@ function tkTabLabel(k){ if(k==="general") return "🌐 Générale"; return (k===
 function tkName(k){ if(k==="general") return "Générale"; return NAMES[k]+(k===WHO?" (moi)":""); }
 const REPEAT_MS={day:864e5,week:6048e5,quinzaine:1296e6}, REPEAT_LBL={day:"chaque jour",week:"chaque semaine",quinzaine:"chaque quinzaine"};
 // ⚠️ UNE TÂCHE « CHAQUE JOUR » NE SE ROUVRAIT PAS AU CHANGEMENT DE JOUR, MAIS
-// 24 H APRÈS LE CLIC (correctif du jumeau Noctra, resté ouvert ici jusqu'au 12/09).
+// 24 H APRÈS LE CLIC (corrigé le 12/09).
 // Cochée lundi à 23 h, elle restait « ✓ faite » mardi jusqu'à 23 h — alors qu'on
 // est mardi et qu'elle n'a pas été faite. On compare donc des DATES : le jour pour
 // « chaque jour », la semaine ISO pour « chaque semaine », la quinzaine pour
@@ -1128,8 +1125,8 @@ function tkId(){ return Date.now().toString(36)+Math.random().toString(36).slice
 let TK_AC=null;
 function tkPop(){ try{ if(!TK_AC) TK_AC=new (window.AudioContext||window.webkitAudioContext)(); const c=TK_AC,o=c.createOscillator(),g=c.createGain(); o.type="sine"; o.frequency.setValueAtTime(880,c.currentTime); o.frequency.exponentialRampToValueAtTime(1320,c.currentTime+0.07); g.gain.setValueAtTime(0.07,c.currentTime); g.gain.exponentialRampToValueAtTime(0.0001,c.currentTime+0.16); o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime+0.18); }catch(e){} }
 let TK_LAST_EDIT = 0;
-// Même verrou que le jumeau Noctra : pas d'envoi tant qu'aucune lecture n'a
-// réussi (la synchro toutes les 8 s fusionne et lève le verrou).
+// Verrou : pas d'envoi tant qu'aucune lecture n'a réussi (la synchro toutes
+// les 8 s fusionne et lève le verrou).
 let TASKS_LOADED=false;
 function saveTasks(){
   tkNorm(); TK_LAST_EDIT=Date.now(); localStorage.setItem("ccs_tasks",JSON.stringify(TASKS));
@@ -1156,7 +1153,7 @@ async function loadTasks(){
 async function syncTasks(){
   if(!TOKEN) return;
   // Onglet en arrière-plan : inutile de sonder. Sans ce garde, un onglet oublié
-  // lisait la base toutes les 8 s, ~450 fois par heure (correctif du jumeau, 12/09).
+  // lisait la base toutes les 8 s, ~450 fois par heure (corrigé le 12/09).
   try{ if(document.visibilityState === "hidden") return; }catch(e){}
   try{
     const r=await fetch(HUB_BASE+"/api/hub/tasks",{headers:{"x-hub-token":TOKEN}}); if(!r.ok) return;
